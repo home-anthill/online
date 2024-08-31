@@ -1,13 +1,13 @@
 use crate::config::Env;
-use std::env;
-use std::future::Future;
 use log::{error, info, warn};
 use mongodb::bson::doc;
 use mongodb::options::{ClientOptions, ServerApi, ServerApiVersion};
 use mongodb::{Client, Database};
 use rocket::fairing::AdHoc;
+use std::env;
+use std::future::Future;
 
-pub mod sensor;
+pub mod online;
 
 pub fn init(env_config: Env) -> AdHoc {
     AdHoc::on_ignite("Connecting to MongoDB", |rocket| async {
@@ -21,12 +21,12 @@ pub fn init(env_config: Env) -> AdHoc {
     })
 }
 
-async fn connect(env_config: Env) -> mongodb::error::Result<Database> {
+pub async fn connect(env_config: Env) -> mongodb::error::Result<Database> {
     let mongo_uri = env_config.mongo_uri.clone();
 
     let mongo_db_name = if env::var("ENV") == Ok(String::from("testing")) {
-        warn!("TESTING ENVIRONMENT - forcing mongo_db_name = 'sensors_test'");
-        String::from("sensors_test")
+        warn!("TESTING ENVIRONMENT - forcing mongo_db_name = 'online_test'");
+        String::from("online_test")
     } else {
         env_config.mongo_db_name.clone()
     };
@@ -36,7 +36,7 @@ async fn connect(env_config: Env) -> mongodb::error::Result<Database> {
     let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
     client_options.server_api = Some(server_api);
     // Set app_name
-    client_options.app_name = Some("register".to_string());
+    client_options.app_name = Some("online".to_string());
 
     // Create a new client and connect to the server
     let client = Client::with_options(client_options)?;
@@ -51,7 +51,7 @@ async fn connect(env_config: Env) -> mongodb::error::Result<Database> {
 async fn retry_connect_mongodb<T, E, Fut, F>(mut f: F, retries: usize) -> Result<T, E>
 where
     F: FnMut() -> Fut,
-    Fut: Future<Output=Result<T, E>>,
+    Fut: Future<Output = Result<T, E>>,
 {
     let mut count = 0;
     loop {

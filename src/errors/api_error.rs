@@ -13,7 +13,7 @@ pub struct ApiResponse {
 #[rocket::async_trait]
 impl<'r> Responder<'r, 'r> for ApiResponse {
     fn respond_to(self, req: &'r Request<'_>) -> Result<'static> {
-        Response::build_from(self.json.respond_to(req).unwrap())
+        Response::build_from(self.json.respond_to(req)?)
             .status(Status { code: self.code })
             .header(ContentType::JSON)
             .ok()

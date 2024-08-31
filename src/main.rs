@@ -4,10 +4,10 @@ extern crate rocket;
 use log::info;
 use rocket::{Build, Rocket};
 
-use register::catchers;
-use register::config::{init, Env};
-use register::db;
-use register::routes;
+use online::catchers;
+use online::config::{init, Env};
+use online::db;
+use online::routes;
 
 #[launch]
 fn rocket() -> Rocket<Build> {
@@ -15,25 +15,13 @@ fn rocket() -> Rocket<Build> {
     let env: Env = init();
 
     // 2. Init Rocket
-    // a) connect to DB
+    // a) assign Database to Rocket (you can get a reference inside REST functions)
     // b) define APIs
     // c) define error handlers
     info!(target: "app", "Starting Rocket...");
     rocket::build()
         .attach(db::init(env))
-        .mount(
-            "/",
-            routes![
-                routes::api::post_register_temperature,
-                routes::api::post_register_humidity,
-                routes::api::post_register_light,
-                routes::api::post_register_motion,
-                routes::api::post_register_airquality,
-                routes::api::post_register_airpressure,
-                routes::api::get_sensor_value,
-                routes::api::keep_alive,
-            ],
-        )
+        .mount("/", routes![routes::api::get_online, routes::api::keep_alive])
         .register(
             "/",
             catchers![

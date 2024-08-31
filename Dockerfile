@@ -48,6 +48,6 @@ WORKDIR /app
 COPY --from=builder /app/Rocket.toml Rocket.toml
 COPY --from=builder /app/log4rs.yaml log4rs.yaml
 COPY --from=builder /app/.env_template /.env
-COPY --from=builder /app/target/release/register register
+COPY --from=builder /app/target/release/online online
 
-ENTRYPOINT ["./register"]
+ENTRYPOINT ["./online"]

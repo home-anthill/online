@@ -1,2 +1,1 @@
-pub mod inputs;
-pub mod sensor;
+pub mod online;

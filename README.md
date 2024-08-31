@@ -4,7 +4,7 @@
   <br>
 home-anthill
   <br>
-register
+online
 </h1>
 
 
@@ -15,20 +15,13 @@ Take a look here [home-anthill/docs](https://github.com/home-anthill/docs)
 
 ## :fire: Releases :fire:
 
-DockerHub releases [HERE](https://hub.docker.com/repository/registry-1.docker.io/ks89/register/general)
+DockerHub releases [HERE](https://hub.docker.com/repository/registry-1.docker.io/ks89/online/general)
 
-GitHub releases [HERE](https://github.com/home-anthill/register/releases)
+GitHub releases [HERE](https://github.com/home-anthill/online/releases)
 
 Versions:
 
-- 20/08/2024 - 1.1.1
-- 20/08/2024 - 1.1.0
-- 19/08/2024 - 1.0.2
-- 19/05/2024 - 1.0.1
-- 19/05/2024 - 1.0.0
-- 08/03/2023 - 1.0.0-beta.3
-- 26/01/2023 - 1.0.0-beta.2
-- 11/01/2023 - 1.0.0-beta.1
+- 31/09/2024 - 1.0.0
 
 
 ## :sparkling_heart: A big thank you to :sparkling_heart:
