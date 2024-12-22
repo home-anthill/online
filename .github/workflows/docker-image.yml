@@ -48,7 +48,6 @@ jobs:
           redis-version: "7.x"
       - name: Run tests
         run: |
-          cp .env_template .env
           echo "Installing dependencies"
           make deps-ci
           echo "Running tests"
