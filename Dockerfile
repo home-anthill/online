@@ -43,11 +43,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # to run the binary file you need:
-# - environment file
 # - rocket config file
 COPY --from=builder /app/Rocket.toml Rocket.toml
 COPY --from=builder /app/log4rs.yaml log4rs.yaml
-COPY --from=builder /app/.env_template /.env
 COPY --from=builder /app/target/release/online online
 
 ENTRYPOINT ["./online"]
