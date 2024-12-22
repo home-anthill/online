@@ -1,53 +1,40 @@
-use log::info;
-use std::env;
+use futures::StreamExt;
+use std::collections::HashMap;
 
-use mongodb::bson::DateTime;
-use mongodb::bson::{doc, Document};
-use mongodb::options::ClientOptions;
-use mongodb::{Client, Database};
+use rocket_db_pools::deadpool_redis::redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 
-pub async fn connect() -> mongodb::error::Result<Database> {
-    let mongo_uri = env::var("MONGO_URI").expect("MONGO_URI is not found.");
-    let mongo_db_name = String::from("online_test");
-
-    let mut client_options = ClientOptions::parse(mongo_uri).await?;
-    client_options.app_name = Some("online-test".to_string());
-    let client = Client::with_options(client_options)?;
-    let database = client.database(mongo_db_name.as_str());
-
-    info!("MongoDB testing connected!");
-
-    Ok(database)
+pub async fn drop_all_test_keys(con: &MultiplexedConnection) {
+    let mut conn = (*con).clone();
+    let values = conn.scan_match::<&str, String>("test-*").await.unwrap();
+    let keys: Vec<String> = values.collect().await;
+    for key in &keys {
+        conn.del::<&str, u64>(key).await.unwrap();
+    }
 }
 
-pub async fn drop_all_collections(db: &Database) {
-    db.collection::<Document>("online")
-        .drop()
+pub async fn insert_online(con: &MultiplexedConnection, key: &str, date: u64) {
+    let mut conn = (*con).clone();
+    // fill db with a sensor with default zero value
+    let _: Value = conn
+        .hset_multiple(key, &[("online", 1u64), ("createdAt", date)])
         .await
-        .expect("drop 'online' collection");
-}
+        .unwrap();
+    // read from db
+    let is_exists: Value = conn.exists(key).await.unwrap();
+    assert_eq!(is_exists, Value::Int(1));
 
-pub async fn find_online_by_uuid(db: &Database, uuid: &String) -> mongodb::error::Result<Option<Document>> {
-    let collection = db.collection::<Document>("online");
-    let filter = doc! { "uuid": uuid };
-    collection.find_one(filter).await
-}
-
-pub async fn insert_online(
-    db: &Database,
-    uuid: &String,
-    api_token: &String,
-    online: bool,
-) -> mongodb::error::Result<String> {
-    let collection = db.collection::<Document>("online");
-    let insert_one_result = collection
-        .insert_one(doc! {
-            "uuid": uuid,
-            "apiToken": api_token,
-            "createdAt": DateTime::now(),
-            "modifiedAt": DateTime::now(),
-            "online": online,
-        })
-        .await?;
-    Ok(insert_one_result.inserted_id.as_object_id().unwrap().to_hex())
+    // hgetall returns the entire redis hash table (with all "key: value")
+    let value: HashMap<String, u64> = conn.hgetall(key).await.unwrap();
+    let online: bool = value.get("online").is_some();
+    let created_at: u64 = match value.get("createdAt") {
+        Some(val) => *val,
+        None => 0u64,
+    };
+    let modified_at: u64 = match value.get("modifiedAt") {
+        Some(val) => *val,
+        None => 0u64,
+    };
+    assert!(online);
+    assert_eq!(created_at, date);
+    assert_eq!(modified_at, 0); // because only created and not modified
 }

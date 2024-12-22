@@ -1,11 +1,13 @@
 use log::{debug, error, info};
-use mongodb::bson::doc;
-use mongodb::Database;
+use std::collections::HashMap;
+use std::env;
+
 use rocket::http::Status;
 use rocket::serde::json::json;
-use rocket::State;
+use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value};
+use rocket_db_pools::Connection;
 
-use crate::db::online;
+use crate::db::RedisPool;
 use crate::errors::api_error::{ApiError, ApiResponse};
 
 /// keepalive
@@ -17,36 +19,52 @@ pub async fn keep_alive() -> ApiResponse {
     }
 }
 
-/// get sensor value by UUID and type
+/// get online value by UUID
 #[get("/online/<uuid>")]
-pub async fn get_online(db: &State<Database>, uuid: &str) -> ApiResponse {
+pub async fn get_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
     info!(target: "app", "REST - GET - get_online");
-    debug!(target: "app", "REST - GET - called with uuid = {}", uuid);
-    match online::find_online_by_uuid(db, uuid).await {
-        Ok(online_doc) => {
-            info!(target: "app", "REST - GET - result online_doc = {}", online_doc);
-            let online = online_doc.get_bool("online").unwrap();
-            let created_at = online_doc.get_datetime("createdAt").unwrap().timestamp_millis();
-            let modified_at = online_doc.get_datetime("modifiedAt").unwrap().timestamp_millis();
-            ApiResponse {
-                json: json!({
-                    "online": online,
-                    "createdAt": created_at,
-                    "modifiedAt": modified_at,
-                }),
-                code: Status::Ok.code,
-            }
+    debug!(target: "app", "REST - GET - get_online called with uuid = {}", uuid);
+    let mut con = db.clone();
+
+    let env = env::var("ENV").ok().unwrap_or("".to_string());
+    debug!(target: "app", "env = {:?}", env);
+
+    let key = (if env == "testing" { "test-" } else { "online-" }).to_owned() + uuid;
+    debug!(target: "app", "key = {:?}", key);
+
+    let is_exists: Value = con.exists(&key).await.unwrap();
+    debug!(target: "app", "is_exists = {:?}", is_exists);
+
+    if is_exists == Value::Int(1) {
+        let value: HashMap<String, u64> = con.hgetall(&key).await.unwrap();
+        debug!(target: "app", "value = {:?}", value);
+
+        let online: bool = value.get("online").is_some();
+        let created_at: u64 = match value.get("createdAt") {
+            Some(val) => *val,
+            None => 0u64,
+        };
+        let modified_at: u64 = match value.get("modifiedAt") {
+            Some(val) => *val,
+            None => 0u64,
+        };
+        ApiResponse {
+            json: json!({
+                "online": online,
+                "createdAt": created_at,
+                "modifiedAt": modified_at,
+            }),
+            code: Status::Ok.code,
         }
-        Err(error) => {
-            error!(target: "app", "REST - GET - error {:?}", &error);
-            ApiResponse {
-                json: serde_json::to_value(ApiError {
-                    message: "Internal server error".to_string(),
-                    code: error.clone().code,
-                })
-                .unwrap(),
-                code: error.clone().code,
-            }
+    } else {
+        error!(target: "app", "REST - GET - get_online - error");
+        ApiResponse {
+            json: serde_json::to_value(ApiError {
+                message: "Not found error".to_string(),
+                code: Status::NotFound.code,
+            })
+            .unwrap(),
+            code: Status::NotFound.code,
         }
     }
 }

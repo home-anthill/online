@@ -1,46 +1,45 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use super::rocket;
-use mongodb::Database;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
+use serde_json::{Map, Value};
 
-use serde_json::{json, Value};
-
-use crate::tests_integration::db_utils::{connect, drop_all_collections, find_online_by_uuid, insert_online};
+use crate::tests_integration::db_utils::{drop_all_test_keys, insert_online};
+use rocket_db_pools::deadpool_redis::{redis::aio::MultiplexedConnection, Config, Connection, Runtime};
 
 #[rocket::async_test]
 async fn get_online() {
     // init
     let client: Client = Client::tracked(rocket()).await.unwrap();
-    let db: Database = connect().await.unwrap();
-    drop_all_collections(&db).await;
-    // inputs
-    let sensor_uuid: String = Uuid::new_v4().to_string();
-    let api_token: String = Uuid::new_v4().to_string();
-    // fill db with a sensor with default zero value
-    let _ = insert_online(&db, &sensor_uuid, &api_token, true).await;
-    // read again the sensor document, previously updated
-    let document = find_online_by_uuid(&db, &sensor_uuid).await.unwrap().unwrap();
-    assert_eq!(document.get("online").unwrap().as_bool().unwrap(), true);
-
-    // read dates from db
-    let created_at = document.get_datetime("createdAt").unwrap().timestamp_millis();
-    let modified_at = document.get_datetime("modifiedAt").unwrap().timestamp_millis();
-
-    // test api
-    let req: LocalRequest = client.get(format!("/online/{}", sensor_uuid));
-    let res: LocalResponse = req.dispatch().await;
-
-    // check results
-    assert_eq!(res.status(), Status::Ok);
-    let expected = json!({
-        "online": true,
-        "createdAt": created_at,
-        "modifiedAt": modified_at,
-    });
-    assert_eq!(res.into_json::<Value>().await.unwrap(), expected);
+    let cfg: Config = Config::from_url("redis://localhost:6379");
+    let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let connection: Connection = pool.get().await.unwrap();
+    let con: MultiplexedConnection = connection.clone();
 
     // cleanup
-    drop_all_collections(&db).await;
+    drop_all_test_keys(&con).await;
+
+    // inputs
+    let uuid: String = Uuid::new_v4().to_string();
+    let db_key: String = "test-".to_owned() + &uuid;
+    let date: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    // insert in db
+    insert_online(&con, &db_key, date).await;
+
+    // test api
+    let req: LocalRequest = client.get(format!("/online/{}", &uuid));
+    let res: LocalResponse = req.dispatch().await;
+
+    // check response status
+    assert_eq!(res.status(), Status::Ok);
+    // check response
+    let json_val: Value = res.into_json::<Value>().await.unwrap();
+    let result: &Map<String, Value> = json_val.as_object().unwrap();
+    assert_eq!(result.get("online").unwrap(), true);
+    assert_eq!(result.get("createdAt").unwrap(), date);
+
+    // cleanup
+    drop_all_test_keys(&con).await;
 }

@@ -1,5 +1,8 @@
 [default]
 
+[default.databases.redis_pool]
+url = "redis://localhost:6379"
+
 [debug]
 # generated via `openssl rand -base64 32`
 # this is only a placeholder, don't use it in production
