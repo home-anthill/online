@@ -33,19 +33,19 @@ pub async fn find_all(db: &MultiplexedConnection) -> Vec<Online> {
             Some(val) => Ok(val),
             None => Ok(""),
         };
-        let created_at: Result<u64, DbError> = match &value.get("createdAt") {
-            Some(val) => match val.parse::<u64>() {
+        let created_at: Result<u128, DbError> = match &value.get("createdAt") {
+            Some(val) => match val.parse::<u128>() {
                 Ok(val) => Ok(val),
                 Err(_) => Err(DbError::DbStrToNumError),
             },
-            None => Ok(0u64),
+            None => Ok(0u128),
         };
-        let modified_at: Result<u64, DbError> = match &value.get("modifiedAt") {
-            Some(val) => match val.parse::<u64>() {
+        let modified_at: Result<u128, DbError> = match &value.get("modifiedAt") {
+            Some(val) => match val.parse::<u128>() {
                 Ok(val) => Ok(val),
                 Err(_) => Err(DbError::DbStrToNumError),
             },
-            None => Ok(0u64),
+            None => Ok(0u128),
         };
 
         if api_token.is_err() {

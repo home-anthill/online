@@ -25,7 +25,7 @@ async fn get_online() {
     let uuid: String = Uuid::new_v4().to_string();
     let db_key: String = "test-".to_owned() + &uuid;
     let api_token: String = Uuid::new_v4().to_string();
-    let date: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let date: u128 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
     // insert in db
     insert_online(&con, &db_key, &api_token, date).await;
 
