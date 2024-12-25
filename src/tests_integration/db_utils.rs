@@ -12,11 +12,14 @@ pub async fn drop_all_test_keys(con: &MultiplexedConnection) {
     }
 }
 
-pub async fn insert_online(con: &MultiplexedConnection, key: &str, date: u64) {
+pub async fn insert_online(con: &MultiplexedConnection, key: &str, api_token: &str, date: u64) {
     let mut conn = (*con).clone();
     // fill db with a sensor with default zero value
     let _: Value = conn
-        .hset_multiple(key, &[("online", 1u64), ("createdAt", date)])
+        .hset_multiple(
+            key,
+            &[("apiToken", api_token), ("createdAt", date.to_string().as_str())],
+        )
         .await
         .unwrap();
     // read from db
@@ -24,17 +27,11 @@ pub async fn insert_online(con: &MultiplexedConnection, key: &str, date: u64) {
     assert_eq!(is_exists, Value::Int(1));
 
     // hgetall returns the entire redis hash table (with all "key: value")
-    let value: HashMap<String, u64> = conn.hgetall(key).await.unwrap();
-    let online: bool = value.get("online").is_some();
-    let created_at: u64 = match value.get("createdAt") {
-        Some(val) => *val,
-        None => 0u64,
-    };
-    let modified_at: u64 = match value.get("modifiedAt") {
-        Some(val) => *val,
-        None => 0u64,
-    };
-    assert!(online);
+    let value: HashMap<String, String> = conn.hgetall(key).await.unwrap();
+    let api_tkn: &str = value.get("apiToken").unwrap();
+    let created_at: u64 = value.get("createdAt").unwrap().parse::<u64>().unwrap();
+    let modified_at: u64 = value.get("modifiedAt").unwrap().parse::<u64>().unwrap();
+    assert_eq!(api_tkn, api_token);
     assert_eq!(created_at, date);
     assert_eq!(modified_at, 0); // because only created and not modified
 }

@@ -19,6 +19,8 @@ opt-level = 3
 panic = "abort"
 
 [dependencies]
+thiserror = "2.0.9"
+anyhow = "1.0.95"
 rocket = { version = "0.5.1", features = ["uuid", "secrets", "json"] }
 rocket_db_pools = { version = "0.2.0", features = ["deadpool_redis"] }
 log = "^0.4.22"

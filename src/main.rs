@@ -2,6 +2,7 @@
 extern crate rocket;
 
 use log::info;
+
 use rocket::{Build, Rocket};
 use rocket_db_pools::Database;
 
@@ -22,7 +23,14 @@ fn rocket() -> Rocket<Build> {
     info!(target: "app", "Starting Rocket...");
     rocket::build()
         .attach(RedisPool::init())
-        .mount("/", routes![routes::api::get_online, routes::api::keep_alive])
+        .mount(
+            "/",
+            routes![
+                routes::api::get_online,
+                routes::api::post_init_fcmtoken,
+                routes::api::keep_alive
+            ],
+        )
         .register(
             "/",
             catchers![

@@ -24,9 +24,10 @@ async fn get_online() {
     // inputs
     let uuid: String = Uuid::new_v4().to_string();
     let db_key: String = "test-".to_owned() + &uuid;
+    let api_token: String = Uuid::new_v4().to_string();
     let date: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     // insert in db
-    insert_online(&con, &db_key, date).await;
+    insert_online(&con, &db_key, &api_token, date).await;
 
     // test api
     let req: LocalRequest = client.get(format!("/online/{}", &uuid));
@@ -37,8 +38,8 @@ async fn get_online() {
     // check response
     let json_val: Value = res.into_json::<Value>().await.unwrap();
     let result: &Map<String, Value> = json_val.as_object().unwrap();
-    assert_eq!(result.get("online").unwrap(), true);
-    assert_eq!(result.get("createdAt").unwrap(), date);
+    assert_eq!(result.get("apiToken").unwrap(), api_token.as_str());
+    assert_eq!(result.get("createdAt").unwrap(), date.to_string().as_str());
 
     // cleanup
     drop_all_test_keys(&con).await;
