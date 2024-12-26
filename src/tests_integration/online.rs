@@ -1,13 +1,13 @@
 use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
 
+use uuid::Uuid;
+use serde_json::{Map, Value};
 use super::rocket;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
-use serde_json::{Map, Value};
+use rocket_db_pools::deadpool_redis::{redis::aio::MultiplexedConnection, Config, Connection, Runtime};
 
 use crate::tests_integration::db_utils::{drop_all_test_keys, insert_online};
-use rocket_db_pools::deadpool_redis::{redis::aio::MultiplexedConnection, Config, Connection, Runtime};
 
 #[rocket::async_test]
 async fn get_online() {
@@ -39,7 +39,10 @@ async fn get_online() {
     let json_val: Value = res.into_json::<Value>().await.unwrap();
     let result: &Map<String, Value> = json_val.as_object().unwrap();
     assert_eq!(result.get("apiToken").unwrap(), api_token.as_str());
-    assert_eq!(result.get("createdAt").unwrap(), date.to_string().as_str());
+    assert_eq!(
+        result.get("createdAt").unwrap().to_string().as_str(),
+        date.to_string().as_str()
+    );
 
     // cleanup
     drop_all_test_keys(&con).await;

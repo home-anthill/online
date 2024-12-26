@@ -30,8 +30,11 @@ pub async fn insert_online(con: &MultiplexedConnection, key: &str, api_token: &s
     let value: HashMap<String, String> = conn.hgetall(key).await.unwrap();
     let api_tkn: &str = value.get("apiToken").unwrap();
     let created_at: u128 = value.get("createdAt").unwrap().parse::<u128>().unwrap();
-    let modified_at: u128 = value.get("modifiedAt").unwrap().parse::<u128>().unwrap();
+    let modified_at = match value.get("modifiedAt") {
+        Some(val) => val.parse::<u128>().unwrap(),
+        None => 0u128,
+    };
     assert_eq!(api_tkn, api_token);
     assert_eq!(created_at, date);
-    assert_eq!(modified_at, 0); // because only created and not modified
+    assert_eq!(modified_at, 0u128); // because only created and not modified
 }
