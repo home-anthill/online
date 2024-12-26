@@ -1,6 +1,5 @@
 use log::{debug, error, info};
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use rocket::http::Status;
 use rocket::serde::json::{json, Json};
@@ -116,18 +115,7 @@ pub async fn post_init_fcmtoken(db: Connection<RedisPool>, input: Json<InitFCMTT
         let _: Value = con
             .hset_multiple(
                 from_uuid_to_db_key(online.uuid.as_str()),
-                &[
-                    ("fcmToken", input.fcmToken.as_str()),
-                    (
-                        "modifiedAt",
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis()
-                            .to_string()
-                            .as_str(),
-                    ),
-                ],
+                &[("fcmToken", input.fcmToken.as_str())],
             )
             .await
             .unwrap();
