@@ -1,11 +1,11 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use uuid::Uuid;
-use serde_json::{Map, Value};
 use super::rocket;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use rocket_db_pools::deadpool_redis::{redis::aio::MultiplexedConnection, Config, Connection, Runtime};
+use serde_json::{Map, Value};
+use uuid::Uuid;
 
 use crate::tests_integration::db_utils::{drop_all_test_keys, insert_online};
 

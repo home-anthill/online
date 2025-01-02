@@ -6,7 +6,7 @@ use rocket::serde::json::{json, Json};
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value};
 use rocket_db_pools::Connection;
 
-use crate::db::online::{find_all, from_uuid_to_db_key};
+use crate::db::online::{find_all, from_uuid_to_db_key, get_date_field_by_name};
 use crate::db::RedisPool;
 use crate::errors::api_error::{ApiError, ApiResponse};
 use crate::errors::db_error::DbError;
@@ -51,20 +51,8 @@ pub async fn get_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
         Some(val) => Ok(val),
         None => Err(DbError::DbNotFound),
     };
-    let created_at: Result<u128, DbError> = match &value.get("createdAt") {
-        Some(val) => match val.parse::<u128>() {
-            Ok(val) => Ok(val),
-            Err(_) => Err(DbError::DbStrToNumError),
-        },
-        None => Ok(0u128),
-    };
-    let modified_at: Result<u128, DbError> = match &value.get("modifiedAt") {
-        Some(val) => match val.parse::<u128>() {
-            Ok(val) => Ok(val),
-            Err(_) => Err(DbError::DbStrToNumError),
-        },
-        None => Ok(0u128),
-    };
+    let created_at: Result<u128, DbError> = get_date_field_by_name(&value, "createdAt");
+    let modified_at: Result<u128, DbError> = get_date_field_by_name(&value, "modifiedAt");
 
     if api_token.is_err() {
         error!(target: "app", "REST - GET - get_online - apiToken is missing");

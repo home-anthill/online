@@ -1,6 +1,6 @@
 use futures::StreamExt;
-use std::collections::HashMap;
 use rocket_db_pools::deadpool_redis::redis::{aio::MultiplexedConnection, AsyncCommands, Value};
+use std::collections::HashMap;
 
 pub async fn drop_all_test_keys(db: &MultiplexedConnection) {
     let mut conn = (*db).clone();

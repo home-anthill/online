@@ -3,7 +3,7 @@ use log::{error, info};
 use std::collections::HashMap;
 use std::env;
 
-use rocket_db_pools::deadpool_redis::redis::{aio::MultiplexedConnection, AsyncCommands, Value};
+use rocket_db_pools::deadpool_redis::redis::{aio::MultiplexedConnection, AsyncCommands};
 
 use crate::errors::db_error::DbError;
 use crate::models::online::Online;
@@ -33,20 +33,9 @@ pub async fn find_all(db: &MultiplexedConnection) -> Vec<Online> {
             Some(val) => Ok(val),
             None => Ok(""),
         };
-        let created_at: Result<u128, DbError> = match &value.get("createdAt") {
-            Some(val) => match val.parse::<u128>() {
-                Ok(val) => Ok(val),
-                Err(_) => Err(DbError::DbStrToNumError),
-            },
-            None => Ok(0u128),
-        };
-        let modified_at: Result<u128, DbError> = match &value.get("modifiedAt") {
-            Some(val) => match val.parse::<u128>() {
-                Ok(val) => Ok(val),
-                Err(_) => Err(DbError::DbStrToNumError),
-            },
-            None => Ok(0u128),
-        };
+
+        let created_at: Result<u128, DbError> = get_date_field_by_name(&value, "createdAt");
+        let modified_at: Result<u128, DbError> = get_date_field_by_name(&value, "modifiedAt");
 
         if api_token.is_err() {
             error!(target: "app", "REST - GET - find_all - apiToken is missing");
@@ -83,4 +72,18 @@ pub fn from_db_key_to_uuid(db_key: &str) -> String {
 pub fn get_all_keys_pattern() -> String {
     let env = env::var("ENV").ok().unwrap_or("".to_string());
     (if env == "testing" { "test-*" } else { "online-*" }).to_owned()
+}
+
+pub fn get_date_field_by_name(value: &HashMap<String, String>, field_name: &str) -> Result<u128, DbError> {
+    if field_name != "createdAt" || field_name != "modifiedAt" {
+        return Err(DbError::UnknownFieldNameError);
+    }
+    let date: Result<u128, DbError> = match value.get(field_name) {
+        Some(val) => match val.parse::<u128>() {
+            Ok(val) => Ok(val),
+            Err(_) => Err(DbError::DbStrToNumError),
+        },
+        None => Ok(0u128),
+    };
+    date
 }

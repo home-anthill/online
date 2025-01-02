@@ -1,9 +1,9 @@
 use super::rocket;
 
 mod errors_catchers;
+mod fcmtoken;
 mod keepalive;
 mod online;
-mod fcmtoken;
 
 // test utils
 mod db_utils;
