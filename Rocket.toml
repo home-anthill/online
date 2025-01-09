@@ -7,6 +7,7 @@ url = "redis://localhost:6379"
 # generated via `openssl rand -base64 32`
 # this is only a placeholder, don't use it in production
 secret_key="3O46i/aNZk9/h2YMgoVwEobGUlKDVt1u/tA0rBJN3KM="
+port = 8089
 
 [release]
 address = "0.0.0.0"
