@@ -1,10 +1,10 @@
 use log::{debug, error, info};
-use std::collections::HashMap;
-
 use rocket::http::Status;
 use rocket::serde::json::{json, Json};
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value};
 use rocket_db_pools::Connection;
+use std::collections::HashMap;
+use std::time::UNIX_EPOCH;
 
 use crate::db::online::{find_all, from_uuid_to_db_key, get_date_field_by_name};
 use crate::db::RedisPool;
@@ -81,6 +81,7 @@ pub async fn get_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
             "apiToken": api_token.unwrap(),
             "createdAt": created_at.unwrap(),
             "modifiedAt": modified_at.unwrap(),
+            "currentTime": UNIX_EPOCH.elapsed().unwrap().as_millis()
         }),
         code: Status::Ok.code,
     }
