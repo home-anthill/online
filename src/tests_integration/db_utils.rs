@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use rocket_db_pools::deadpool_redis::redis::{aio::MultiplexedConnection, AsyncCommands, Value};
+use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value, aio::MultiplexedConnection};
 use std::collections::HashMap;
 
 pub async fn drop_all_test_keys(db: &MultiplexedConnection) {

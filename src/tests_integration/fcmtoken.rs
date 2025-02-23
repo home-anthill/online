@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::rocket;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
-use rocket_db_pools::deadpool_redis::{redis::aio::MultiplexedConnection, Config, Connection, Runtime};
+use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
 use uuid::Uuid;
 
 use crate::tests_integration::db_utils::{drop_all_test_keys, get_fcmtoken_by_uuid, insert_online};

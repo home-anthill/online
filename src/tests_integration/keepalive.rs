@@ -2,7 +2,7 @@ use super::rocket;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[rocket::async_test]
 async fn keepalive() {

@@ -3,7 +3,7 @@ use log::{error, info};
 use std::collections::HashMap;
 use std::env;
 
-use rocket_db_pools::deadpool_redis::redis::{aio::MultiplexedConnection, AsyncCommands};
+use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, aio::MultiplexedConnection};
 
 use crate::errors::db_error::DbError;
 use crate::models::online::Online;
