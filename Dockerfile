@@ -45,7 +45,6 @@ WORKDIR /app
 # to run the binary file you need:
 # - rocket config file
 COPY --from=builder /app/Rocket.toml Rocket.toml
-COPY --from=builder /app/log4rs.yaml log4rs.yaml
 COPY --from=builder /app/target/release/online online
 
 ENTRYPOINT ["./online"]

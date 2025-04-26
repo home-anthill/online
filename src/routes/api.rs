@@ -1,10 +1,11 @@
-use log::{debug, error, info};
+use std::collections::HashMap;
+use std::time::UNIX_EPOCH;
+
 use rocket::http::Status;
 use rocket::serde::json::{Json, json};
 use rocket_db_pools::Connection;
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value};
-use std::collections::HashMap;
-use std::time::UNIX_EPOCH;
+use tracing::{debug, error, info};
 
 use crate::db::RedisPool;
 use crate::db::online::{find_all, from_uuid_to_db_key, get_date_field_by_name};

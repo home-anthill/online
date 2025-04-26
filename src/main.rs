@@ -1,10 +1,9 @@
 #[macro_use]
 extern crate rocket;
 
-use log::info;
-
 use rocket::{Build, Rocket};
 use rocket_db_pools::Database;
+use tracing::info;
 
 use online::catchers;
 use online::config::init;

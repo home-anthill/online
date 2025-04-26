@@ -1,9 +1,9 @@
-use futures::StreamExt;
-use log::{error, info};
 use std::collections::HashMap;
 use std::env;
 
+use futures::StreamExt;
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, aio::MultiplexedConnection};
+use tracing::{error, info};
 
 use crate::errors::db_error::DbError;
 use crate::models::online::Online;
