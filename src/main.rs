@@ -26,6 +26,7 @@ fn rocket() -> Rocket<Build> {
             "/",
             routes![
                 routes::api::get_online,
+                routes::api::delete_online,
                 routes::api::post_init_fcmtoken,
                 routes::api::keep_alive
             ],

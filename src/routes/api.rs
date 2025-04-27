@@ -88,6 +88,42 @@ pub async fn get_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
     }
 }
 
+/// delete online to prevent infinite notifications
+#[delete("/online/<uuid>")]
+pub async fn delete_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
+    info!(target: "app", "REST - DELETE - delete_online called with uuid = {}", uuid);
+    let mut con = db.clone();
+
+    let db_key = from_uuid_to_db_key(uuid);
+    debug!(target: "app", "REST - DELETE - delete_online - db_key = {:?}", db_key);
+
+    let is_exists: Value = con.exists(&db_key).await.unwrap();
+    if is_exists != Value::Int(1) {
+        info!(target: "app", "REST - DELETE - delete_online - already don't exist");
+        return ApiResponse {
+            json: json!({}),
+            code: Status::Ok.code,
+        };
+    }
+
+    let res: u64 = con.del(&db_key).await.unwrap();
+    if res != 1 {
+        error!(target: "app", "REST - DELETE - delete_online - cannot delete online");
+        return ApiResponse {
+            json: serde_json::to_value(ApiError {
+                message: "Cannot delete error".to_string(),
+                code: Status::InternalServerError.code,
+            })
+            .unwrap(),
+            code: Status::InternalServerError.code,
+        };
+    }
+    ApiResponse {
+        json: json!({}),
+        code: Status::Ok.code,
+    }
+}
+
 /// init fcm token
 #[post("/fcmtoken", data = "<input>")]
 pub async fn post_init_fcmtoken(db: Connection<RedisPool>, input: Json<InitFCMTTokenInput>) -> ApiResponse {
