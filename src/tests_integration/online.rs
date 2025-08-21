@@ -76,7 +76,7 @@ async fn delete_online() {
     let req: LocalRequest = client.delete(format!("/online/{}", &uuid));
     let res: LocalResponse = req.dispatch().await;
     assert_eq!(res.status(), Status::Ok);
-    
+
     // verify that online has been removed
     let get_req2: LocalRequest = client.get(format!("/online/{}", &uuid));
     let get_res2: LocalResponse = get_req2.dispatch().await;
