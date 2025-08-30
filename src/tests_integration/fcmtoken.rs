@@ -10,6 +10,7 @@ use crate::tests_integration::db_utils::{drop_all_test_keys, get_fcmtoken_by_uui
 use online::models::inputs::InitFCMTTokenInput;
 
 #[rocket::async_test]
+#[test_log::test]
 async fn post_fcmtoken() {
     // init
     let client: Client = Client::tracked(rocket()).await.unwrap();

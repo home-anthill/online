@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::tests_integration::db_utils::{drop_all_test_keys, insert_online};
 
 #[rocket::async_test]
+#[test_log::test]
 async fn get_online() {
     // init
     let client: Client = Client::tracked(rocket()).await.unwrap();
@@ -49,6 +50,7 @@ async fn get_online() {
 }
 
 #[rocket::async_test]
+#[test_log::test]
 async fn delete_online() {
     // init
     let client: Client = Client::tracked(rocket()).await.unwrap();

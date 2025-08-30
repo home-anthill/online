@@ -5,6 +5,7 @@ use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use serde_json::{Value, json};
 
 #[rocket::async_test]
+#[test_log::test]
 async fn keepalive() {
     let client: Client = Client::tracked(rocket()).await.unwrap();
 
