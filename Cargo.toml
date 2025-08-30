@@ -24,7 +24,7 @@ rocket = { version = "0.5.1", features = ["uuid", "secrets", "json"] }
 rocket_db_pools = { version = "0.2.0", features = ["deadpool_redis"] }
 tracing = "^0.1.41"
 tracing-appender = "^0.2.3"
-tracing-subscriber = { version = "^0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "^0.3.20", features = ["env-filter"] }
 futures = "^0.3.31"
 
 # To use Serialize and Deserialize traits, you must include Serde.
