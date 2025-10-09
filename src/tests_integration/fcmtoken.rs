@@ -23,8 +23,9 @@ async fn post_fcmtoken() {
     drop_all_test_keys(&con).await;
 
     // inputs
-    let uuid: String = Uuid::new_v4().to_string();
-    let db_key: String = "test-".to_owned() + &uuid;
+    let device_uuid: String = Uuid::new_v4().to_string();
+    let feature_uuid: String = Uuid::new_v4().to_string();
+    let db_key: String = "test_".to_owned() + &device_uuid + "_feature_" + &feature_uuid;
     let api_token: String = Uuid::new_v4().to_string();
     let date: u128 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
     // insert in db

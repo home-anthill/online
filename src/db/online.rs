@@ -14,7 +14,7 @@ pub async fn find_all(db: &MultiplexedConnection) -> Vec<Online> {
 
     let mut not_online_devices: Vec<Online> = vec![];
 
-    // get all keys with format 'online-<uuid>' or 'test-<uuid>'
+    // get all keys with format 'online_<deviceUuid>_feature_<featureUuid>'
     let db_keys: Vec<String> = con
         .scan_match::<&str, String>(get_all_keys_pattern().as_str())
         .await
@@ -25,6 +25,11 @@ pub async fn find_all(db: &MultiplexedConnection) -> Vec<Online> {
     for db_key in db_keys {
         // hgetall returns the entire redis hash table (with all "key: value")
         let value: HashMap<String, String> = con.hgetall(db_key.as_str()).await.unwrap();
+
+        let items: Vec<&str> = db_key.split('_').collect();
+        let device_uuid = items.get(1).unwrap().to_string();
+        let feature_uuid = items.last().unwrap().to_string();
+
         let api_token: Result<&str, DbError> = match &value.get("apiToken") {
             Some(val) => Ok(val),
             None => Err(DbError::DbNotFound),
@@ -47,8 +52,9 @@ pub async fn find_all(db: &MultiplexedConnection) -> Vec<Online> {
         }
 
         let online: Online = Online {
-            uuid: from_db_key_to_uuid(db_key.as_str()),
             apiToken: api_token.unwrap().to_string(),
+            deviceUuid: device_uuid.to_string(),
+            featureUuid: feature_uuid.to_string(),
             fcmToken: fcm_token.unwrap().to_string(),
             createdAt: created_at.unwrap().to_string(),
             modifiedAt: modified_at.unwrap().to_string(),
@@ -58,20 +64,14 @@ pub async fn find_all(db: &MultiplexedConnection) -> Vec<Online> {
     not_online_devices
 }
 
-pub fn from_uuid_to_db_key(uuid: &str) -> String {
+pub fn from_uuid_to_db_key(device_uuid: &str, feature_uuid: &str) -> String {
     let env = env::var("ENV").ok().unwrap_or("".to_string());
-    if env == "testing" { "test-" } else { "online-" }.to_owned() + uuid
-}
-
-pub fn from_db_key_to_uuid(db_key: &str) -> String {
-    let env = env::var("ENV").ok().unwrap_or("".to_string());
-    let pattern = if env == "testing" { "test-" } else { "online-" };
-    db_key.replace(pattern, "")
+    if env == "testing" { "test_" } else { "online_" }.to_owned() + device_uuid + "_feature_" + feature_uuid
 }
 
 pub fn get_all_keys_pattern() -> String {
     let env = env::var("ENV").ok().unwrap_or("".to_string());
-    (if env == "testing" { "test-*" } else { "online-*" }).to_owned()
+    (if env == "testing" { "test_*" } else { "online_*" }).to_owned()
 }
 
 pub fn get_date_field_by_name(value: &HashMap<String, String>, field_name: &str) -> Result<u128, DbError> {

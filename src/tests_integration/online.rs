@@ -4,6 +4,7 @@ use super::rocket;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
+
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
@@ -23,15 +24,16 @@ async fn get_online() {
     drop_all_test_keys(&con).await;
 
     // inputs
-    let uuid: String = Uuid::new_v4().to_string();
-    let db_key: String = "test-".to_owned() + &uuid;
+    let device_uuid: String = Uuid::new_v4().to_string();
+    let feature_uuid: String = Uuid::new_v4().to_string();
+    let db_key: String = "test_".to_owned() + &device_uuid + "_feature_" + &feature_uuid;
     let api_token: String = Uuid::new_v4().to_string();
     let date: u128 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
     // insert in db
     insert_online(&con, &db_key, &api_token, date).await;
 
     // test api
-    let req: LocalRequest = client.get(format!("/online/{}", &uuid));
+    let req: LocalRequest = client.get(format!("/online/{}/features/{}", &device_uuid, &feature_uuid));
     let res: LocalResponse = req.dispatch().await;
 
     // check response status
@@ -63,24 +65,25 @@ async fn delete_online() {
     drop_all_test_keys(&con).await;
 
     // inputs
-    let uuid: String = Uuid::new_v4().to_string();
-    let db_key: String = "test-".to_owned() + &uuid;
+    let device_uuid: String = Uuid::new_v4().to_string();
+    let feature_uuid: String = Uuid::new_v4().to_string();
+    let db_key: String = "test_".to_owned() + &device_uuid + "_feature_" + &feature_uuid;
     let api_token: String = Uuid::new_v4().to_string();
     let date: u128 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
     // insert in db
     insert_online(&con, &db_key, &api_token, date).await;
     // verify the inserted online
-    let get_req: LocalRequest = client.get(format!("/online/{}", &uuid));
+    let get_req: LocalRequest = client.get(format!("/online/{}/features/{}", &device_uuid, &feature_uuid));
     let get_res: LocalResponse = get_req.dispatch().await;
     assert_eq!(get_res.status(), Status::Ok);
 
     // test api
-    let req: LocalRequest = client.delete(format!("/online/{}", &uuid));
+    let req: LocalRequest = client.delete(format!("/online/{}/features/{}", &device_uuid, &feature_uuid));
     let res: LocalResponse = req.dispatch().await;
     assert_eq!(res.status(), Status::Ok);
 
     // verify that online has been removed
-    let get_req2: LocalRequest = client.get(format!("/online/{}", &uuid));
+    let get_req2: LocalRequest = client.get(format!("/online/{}/features/{}", &device_uuid, &feature_uuid));
     let get_res2: LocalResponse = get_req2.dispatch().await;
     assert_eq!(get_res2.status(), Status::NotFound);
 

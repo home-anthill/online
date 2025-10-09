@@ -24,12 +24,12 @@ pub async fn keep_alive() -> ApiResponse {
 }
 
 /// get online value by UUID
-#[get("/online/<uuid>")]
-pub async fn get_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
-    info!(target: "app", "REST - GET - get_online called with uuid = {}", uuid);
+#[get("/online/<device_uuid>/features/<feature_uuid>")]
+pub async fn get_online(db: Connection<RedisPool>, device_uuid: &str, feature_uuid: &str) -> ApiResponse {
+    info!(target: "app", "REST - GET - get_online called with device_uuid = {}, feature_uuid = {}", device_uuid, feature_uuid);
     let mut con = db.clone();
 
-    let db_key = from_uuid_to_db_key(uuid);
+    let db_key = from_uuid_to_db_key(device_uuid, feature_uuid);
     debug!(target: "app", "REST - GET - get_online - db_key = {:?}", db_key);
 
     let is_exists: Value = con.exists(&db_key).await.unwrap();
@@ -89,12 +89,12 @@ pub async fn get_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
 }
 
 /// delete online to prevent infinite notifications
-#[delete("/online/<uuid>")]
-pub async fn delete_online(db: Connection<RedisPool>, uuid: &str) -> ApiResponse {
-    info!(target: "app", "REST - DELETE - delete_online called with uuid = {}", uuid);
+#[delete("/online/<device_uuid>/features/<feature_uuid>")]
+pub async fn delete_online(db: Connection<RedisPool>, device_uuid: &str, feature_uuid: &str) -> ApiResponse {
+    info!(target: "app", "REST - DELETE - delete_online called device_uuid = {}, feature_uuid = {}", device_uuid, feature_uuid);
     let mut con = db.clone();
 
-    let db_key = from_uuid_to_db_key(uuid);
+    let db_key = from_uuid_to_db_key(device_uuid, feature_uuid);
     debug!(target: "app", "REST - DELETE - delete_online - db_key = {:?}", db_key);
 
     let is_exists: Value = con.exists(&db_key).await.unwrap();
@@ -140,7 +140,7 @@ pub async fn post_init_fcmtoken(db: Connection<RedisPool>, input: Json<InitFCMTT
         debug!(target: "app", "REST - POST - post_init_fcmtoken - online = {:?}", &online);
         let _: Value = con
             .hset_multiple(
-                from_uuid_to_db_key(online.uuid.as_str()),
+                from_uuid_to_db_key(online.deviceUuid.as_str(), online.featureUuid.as_str()),
                 &[("fcmToken", input.fcmToken.as_str())],
             )
             .await
