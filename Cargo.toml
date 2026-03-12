@@ -1,6 +1,6 @@
 [package]
 name = "ks89-online"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 resolver = "3"
 
@@ -19,26 +19,28 @@ opt-level = 3
 panic = "abort"
 
 [dependencies]
-thiserror = "2.0.17"
 rocket = { version = "0.5.1", features = ["uuid", "secrets", "json"] }
 rocket_db_pools = { version = "0.2.0", features = ["deadpool_redis"] }
+futures = "^0.3.32"
+# error handling
+thiserror = "2.0.18"
+# logger
 tracing = "^0.1.44"
 tracing-appender = "^0.2.4"
 tracing-subscriber = { version = "^0.3.22", features = ["env-filter"] }
-futures = "^0.3.31"
 
 # To use Serialize and Deserialize traits, you must include Serde.
 # The "derive" feature is only required when
 # using #[derive(Serialize, Deserialize)] to make Serde work with structs
 # and enums defined in your crate.
 serde = { version = "^1.0.228", features = ["derive"] }
-serde_json = "^1.0.147"
+serde_json = "^1.0.149"
 
 [dev-dependencies]
-uuid = { version = "1.19.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
+uuid = { version = "1.22.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
 # better looking rust assertions
 pretty_assertions = "^1.4.1"
 # include also serde_json with the feature 'preserve_order' to don't change the order of keys
 # 'preserve_order' is required to compare results in a predictible way in testing
-serde_json = { version = "^1.0.147", features = ["preserve_order"] }
+serde_json = { version = "^1.0.149", features = ["preserve_order"] }
 test-log = {version = "0.2.19", features = ["trace"]}
