@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::rocket;
+use pretty_assertions::assert_eq;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
@@ -33,10 +34,7 @@ async fn post_fcmtoken() {
 
     // test api
     let fcm_token: String = "mocked_fcm_token".to_owned();
-    let body = InitFCMTTokenInput {
-        apiToken: api_token.clone(),
-        fcmToken: fcm_token.clone(),
-    };
+    let body = InitFCMTTokenInput { api_token: api_token.clone(), fcm_token: fcm_token.clone() };
     let req: LocalRequest = client.post("/fcmtoken").json(&body);
     let res: LocalResponse = req.dispatch().await;
 

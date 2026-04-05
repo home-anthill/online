@@ -1,13 +1,62 @@
 use std::env;
+use std::fmt;
 
+use dotenvy::dotenv;
+use serde::Deserialize;
 use tracing::info;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::writer::MakeWriterExt;
 
-pub fn init() {
-    // Configure logging
-    if env::var("ENV") != Ok("testing".to_string()) {
-        let stdout = std::io::stdout.with_filter(|meta| meta.target() == "app");
+/// Which runtime environment the application is running in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppEnv {
+    Testing,
+    Production,
+}
+
+impl AppEnv {
+    /// Reads the `ENV` environment variable. Returns `Testing` only when the
+    /// value is exactly `"testing"`; any other value (including absent) is
+    /// treated as `Production`.
+    pub fn from_env() -> Self {
+        match env::var("ENV").as_deref() {
+            Ok("testing") => Self::Testing,
+            _ => Self::Production,
+        }
+    }
+
+    pub fn is_testing(&self) -> bool {
+        matches!(self, Self::Testing)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Env {
+    pub log_level: Option<String>,
+}
+
+impl fmt::Debug for Env {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Env").field("log_level", &self.log_level).finish()
+    }
+}
+
+pub fn init() -> (Env, AppEnv) {
+    // Load the .env file
+    dotenv().ok();
+    let env = envy::from_env::<Env>().expect("failed to parse environment variables");
+    let app_env = AppEnv::from_env();
+
+    // Configure logging if not in test env.
+    // We use set_global_default (not .init()) intentionally: .init() would also install
+    // a LogTracer bridge for the `log` crate, which prevents Rocket from installing its
+    // own RocketLogger. Without RocketLogger, Rocket's startup output (routes, config,
+    // launched URL) is silently dropped. By skipping LogTracer, Rocket gets to install
+    // its own logger and prints its startup info directly to stdout.
+    if !app_env.is_testing() {
+        let stdout_max_level =
+            env.log_level.as_deref().and_then(|s| s.parse::<tracing::Level>().ok()).unwrap_or(tracing::Level::DEBUG);
+        let stdout = std::io::stdout.with_filter(|meta| meta.target() == "app").with_max_level(stdout_max_level);
         let debug_file = RollingFileAppender::builder()
             .rotation(Rotation::DAILY)
             .filename_prefix("info")
@@ -26,13 +75,22 @@ pub fn init() {
             .with_filter(|meta| meta.target() == "app")
             .with_max_level(tracing::Level::ERROR);
         let writer = debug_file.and(error_file).and(stdout);
-        tracing_subscriber::fmt()
+        let subscriber = tracing_subscriber::fmt()
             .compact()
             .with_writer(writer)
             .with_ansi(false)
             .with_max_level(tracing::Level::DEBUG)
-            .init();
+            .finish();
+        tracing::subscriber::set_global_default(subscriber).expect("Unable to install global subscriber");
     }
 
     info!(target: "app", "Starting application...");
+
+    // Print .env vars
+    print_env(&env);
+    (env, app_env)
+}
+
+fn print_env(env: &Env) {
+    info!(target: "app", "log_level = {}", env.log_level.as_deref().unwrap_or("debug"));
 }

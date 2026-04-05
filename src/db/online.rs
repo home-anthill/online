@@ -1,89 +1,136 @@
 use std::collections::HashMap;
 use std::env;
+use std::sync::OnceLock;
 
 use futures::StreamExt;
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, aio::MultiplexedConnection};
+use subtle::ConstantTimeEq;
 use tracing::{error, info};
 
 use crate::errors::db_error::DbError;
 use crate::models::online::Online;
 
-pub async fn find_all(db: &MultiplexedConnection) -> Vec<Online> {
+static IS_TESTING: OnceLock<bool> = OnceLock::new();
+
+fn is_testing() -> bool {
+    *IS_TESTING.get_or_init(|| env::var("ENV").ok().as_deref() == Some("testing"))
+}
+
+pub async fn find_all(db: &mut MultiplexedConnection) -> Vec<Online> {
     info!(target: "app", "find_all - To get all online elements from db");
-    let mut con = db.clone();
 
-    let mut not_online_devices: Vec<Online> = vec![];
+    let mut results: Vec<Online> = Vec::new();
 
-    // get all keys with format 'online_<deviceUuid>_feature_<featureUuid>'
-    let db_keys: Vec<String> = con
-        .scan_match::<&str, String>(get_all_keys_pattern().as_str())
-        .await
-        .unwrap()
-        .collect()
-        .await;
+    let db_keys: Vec<String> = match db.scan_match::<&str, String>(get_all_keys_pattern()).await {
+        Ok(stream) => stream.collect().await,
+        Err(e) => {
+            error!(target: "app", "find_all - Failed to scan Redis: {}", e);
+            return vec![];
+        }
+    };
+
+    let key_prefix = if is_testing() { "test_" } else { "online_" };
 
     for db_key in db_keys {
-        // hgetall returns the entire redis hash table (with all "key: value")
-        let value: HashMap<String, String> = con.hgetall(db_key.as_str()).await.unwrap();
-
-        let items: Vec<&str> = db_key.split('_').collect();
-        let device_uuid = items.get(1).unwrap().to_string();
-        let feature_uuid = items.last().unwrap().to_string();
-
-        let api_token: Result<&str, DbError> = match &value.get("apiToken") {
-            Some(val) => Ok(val),
-            None => Err(DbError::DbNotFound),
-        };
-        let fcm_token: Result<&str, DbError> = match &value.get("fcmToken") {
-            Some(val) => Ok(val),
-            None => Ok(""),
+        let value: HashMap<String, String> = match db.hgetall(&db_key).await {
+            Ok(val) => val,
+            Err(e) => {
+                error!(target: "app", "find_all - Failed to get hash for key {}: {}", db_key, e);
+                continue;
+            }
         };
 
-        let created_at: Result<u128, DbError> = get_date_field_by_name(&value, "createdAt");
-        let modified_at: Result<u128, DbError> = get_date_field_by_name(&value, "modifiedAt");
-
-        if api_token.is_err() {
-            error!(target: "app", "REST - GET - find_all - apiToken is missing");
+        // Key format: {prefix}{device_uuid}_feature_{feature_uuid}
+        let Some(without_prefix) = db_key.strip_prefix(key_prefix) else {
+            error!(target: "app", "find_all - Unexpected key format: {}", db_key);
             continue;
-        }
-        if created_at.is_err() || modified_at.is_err() {
-            error!(target: "app", "REST - GET - find_all - cannot parse dates");
-            continue;
-        }
-
-        let online: Online = Online {
-            apiToken: api_token.unwrap().to_string(),
-            deviceUuid: device_uuid.to_string(),
-            featureUuid: feature_uuid.to_string(),
-            fcmToken: fcm_token.unwrap().to_string(),
-            createdAt: created_at.unwrap().to_string(),
-            modifiedAt: modified_at.unwrap().to_string(),
         };
-        not_online_devices.push(online);
+        let Some((device_uuid, feature_uuid)) = without_prefix.split_once("_feature_") else {
+            error!(target: "app", "find_all - Cannot parse device/feature UUIDs from key: {}", db_key);
+            continue;
+        };
+
+        let api_token = match value.get("apiToken") {
+            Some(val) => val.as_str(),
+            None => {
+                error!(target: "app", "find_all - apiToken is missing for key: {}", db_key);
+                continue;
+            }
+        };
+        let fcm_token = value.get("fcmToken").map_or("", |v| v.as_str());
+
+        let created_at = match get_date_field_by_name(&value, "createdAt") {
+            Ok(val) => val,
+            Err(_) => {
+                error!(target: "app", "find_all - cannot parse createdAt for key: {}", db_key);
+                continue;
+            }
+        };
+        let modified_at = match get_date_field_by_name(&value, "modifiedAt") {
+            Ok(val) => val,
+            Err(_) => {
+                error!(target: "app", "find_all - cannot parse modifiedAt for key: {}", db_key);
+                continue;
+            }
+        };
+
+        results.push(Online {
+            api_token: api_token.to_string(),
+            device_uuid: device_uuid.to_string(),
+            feature_uuid: feature_uuid.to_string(),
+            fcm_token: fcm_token.to_string(),
+            created_at: created_at.to_string(),
+            modified_at: modified_at.to_string(),
+        });
     }
-    not_online_devices
+    results
+}
+
+pub async fn update_fcm_token_by_api_token(
+    db: &mut MultiplexedConnection,
+    api_token: &str,
+    fcm_token: &str,
+) -> Result<(), DbError> {
+    let db_keys: Vec<String> = match db.scan_match::<&str, String>(get_all_keys_pattern()).await {
+        Ok(stream) => stream.collect().await,
+        Err(e) => {
+            error!(target: "app", "update_fcm_token_by_api_token - Failed to scan Redis: {}", e);
+            return Err(DbError::DbScanError);
+        }
+    };
+
+    for db_key in db_keys {
+        let stored_token: Option<String> = match db.hget(&db_key, "apiToken").await {
+            Ok(val) => val,
+            Err(e) => {
+                error!(target: "app", "update_fcm_token_by_api_token - Failed to get apiToken for key {}: {}", db_key, e);
+                continue;
+            }
+        };
+        let tokens_match: bool =
+            stored_token.as_deref().map(|t| t.as_bytes().ct_eq(api_token.as_bytes()).into()).unwrap_or(false);
+        if tokens_match && let Err(e) = db.hset_multiple::<_, _, _, ()>(&db_key, &[("fcmToken", fcm_token)]).await {
+            error!(target: "app", "update_fcm_token_by_api_token - Failed to update fcmToken for key {}: {}", db_key, e);
+        }
+    }
+    Ok(())
 }
 
 pub fn from_uuid_to_db_key(device_uuid: &str, feature_uuid: &str) -> String {
-    let env = env::var("ENV").ok().unwrap_or("".to_string());
-    if env == "testing" { "test_" } else { "online_" }.to_owned() + device_uuid + "_feature_" + feature_uuid
+    let prefix = if is_testing() { "test" } else { "online" };
+    format!("{}_{}_feature_{}", prefix, device_uuid, feature_uuid)
 }
 
-pub fn get_all_keys_pattern() -> String {
-    let env = env::var("ENV").ok().unwrap_or("".to_string());
-    (if env == "testing" { "test_*" } else { "online_*" }).to_owned()
+pub fn get_all_keys_pattern() -> &'static str {
+    if is_testing() { "test_*" } else { "online_*" }
 }
 
 pub fn get_date_field_by_name(value: &HashMap<String, String>, field_name: &str) -> Result<u128, DbError> {
     if field_name != "createdAt" && field_name != "modifiedAt" {
         return Err(DbError::UnknownFieldNameError);
     }
-    let date: Result<u128, DbError> = match value.get(field_name) {
-        Some(val) => match val.parse::<u128>() {
-            Ok(val) => Ok(val),
-            Err(_) => Err(DbError::DbStrToNumError),
-        },
+    match value.get(field_name) {
+        Some(val) => val.parse::<u128>().map_err(|_| DbError::DbStrToNumError),
         None => Ok(0u128),
-    };
-    date
+    }
 }

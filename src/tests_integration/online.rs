@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::rocket;
+use pretty_assertions::assert_eq;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
@@ -38,14 +39,10 @@ async fn get_online() {
 
     // check response status
     assert_eq!(res.status(), Status::Ok);
-    // check response
+    // check response (apiToken is no longer returned)
     let json_val: Value = res.into_json::<Value>().await.unwrap();
     let result: &Map<String, Value> = json_val.as_object().unwrap();
-    assert_eq!(result.get("apiToken").unwrap(), api_token.as_str());
-    assert_eq!(
-        result.get("createdAt").unwrap().to_string().as_str(),
-        date.to_string().as_str()
-    );
+    assert_eq!(result.get("createdAt").unwrap().to_string().as_str(), date.to_string().as_str());
 
     // cleanup
     drop_all_test_keys(&con).await;

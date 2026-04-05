@@ -1,4 +1,5 @@
 use super::rocket;
+use pretty_assertions::assert_eq;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 

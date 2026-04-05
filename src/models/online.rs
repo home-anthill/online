@@ -1,28 +1,27 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
-#[allow(non_snake_case)]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Online {
-    pub apiToken: String,
-    pub deviceUuid: String,
-    pub featureUuid: String,
-    pub fcmToken: String,
-    pub createdAt: String,
-    pub modifiedAt: String,
+    pub api_token: String,
+    pub device_uuid: String,
+    pub feature_uuid: String,
+    pub fcm_token: String,
+    pub created_at: String,
+    pub modified_at: String,
 }
 
-impl IntoIterator for Online {
-    type Item = String;
-    type IntoIter = std::array::IntoIter<String, 6>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator::into_iter([
-            self.apiToken,
-            self.deviceUuid,
-            self.featureUuid,
-            self.fcmToken,
-            self.createdAt,
-            self.modifiedAt,
-        ])
+impl fmt::Debug for Online {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Online")
+            .field("apiToken", &"<redacted>")
+            .field("deviceUuid", &self.device_uuid)
+            .field("featureUuid", &self.feature_uuid)
+            .field("fcmToken", &"<redacted>")
+            .field("createdAt", &self.created_at)
+            .field("modifiedAt", &self.modified_at)
+            .finish()
     }
 }

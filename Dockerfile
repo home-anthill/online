@@ -1,16 +1,20 @@
 # syntax=docker/dockerfile:1
+
+# ── Stage 1: Chef setup ──────────────────────────────────────────────────────
 FROM rust:trixie AS chef
 
-# some cargo dependencies require additional packages
-# to build the project.
+# some cargo dependencies require additional packages to build the project.
 RUN apt-get update && apt-get install -y \
-    g++
+    g++ \
+    openssl \
+    make cmake
 
 WORKDIR /app
 
 RUN cargo install cargo-chef
 
 
+# ── Stage 2: Planner ─────────────────────────────────────────────────────────
 FROM chef AS planner
 
 COPY . .
@@ -18,6 +22,7 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 
+# ── Stage 3: Builder ─────────────────────────────────────────────────────────
 FROM chef AS builder
 
 WORKDIR /app
@@ -33,19 +38,35 @@ COPY . .
 RUN cargo build --release
 
 
-FROM debian:trixie-slim as runtime
+# ── Stage 4: Collect CA certs and runtime shared libraries ───────────────────
+# The hardened runtime image has no package manager, so we install here and
+# copy what we need into the final stage.
+FROM debian:trixie-slim AS system-deps
 
-# to be able to use ROOT CAs file from /etc/ssl/certs/
-# folder, you must install the 'ca-certificates' package or use
-# an image with 'ca-certificates' pre-installed.
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates
+
+# Pre-create the app directory owned by nobody (uid/gid 65534) so the final
+# stage never needs to run a RUN command as root.
+RUN mkdir -p /app/logs && chown -R 65534:65534 /app
+
+
+# ── Stage 5: Hardened runtime ────────────────────────────────────────────────
+# dhi.io/debian-base:trixie — no package manager, no root user, shell present.
+FROM dhi.io/debian-base:trixie AS runtime
+
+# CA certificates for TLS (includes ISRG_Root_X1.pem used in prod).
+COPY --from=system-deps /etc/ssl/certs /etc/ssl/certs
+
+# App directory skeleton (/app and /app/logs owned by nobody).
+COPY --from=system-deps --chown=65534:65534 /app /app
 
 WORKDIR /app
 
-# to run the binary file you need:
-# - rocket config file
-COPY --from=builder /app/Rocket.toml Rocket.toml
-COPY --from=builder /app/target/release/online online
+# Binary and env template.
+COPY --from=builder --chown=65534:65534 /app/target/release/online /app/online
+COPY --from=builder --chown=65534:65534 /app/Rocket.toml Rocket.toml
 
-ENTRYPOINT ["./online"]
+USER 65534
+
+ENTRYPOINT ["/app/online"]

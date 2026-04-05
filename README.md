@@ -21,6 +21,7 @@ GitHub releases [HERE](https://github.com/home-anthill/online/releases)
 
 Versions:
 
+- ??/03/2026 - 2.1.0
 - 16/03/2026 - 2.0.3
 - 15/03/2026 - 2.0.2
 - 12/03/2026 - 2.0.1

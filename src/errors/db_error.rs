@@ -9,4 +9,6 @@ pub enum DbError {
     DbStrToNumError,
     #[error("Unknown field name")]
     UnknownFieldNameError,
+    #[error("Failed to scan Redis keys")]
+    DbScanError,
 }

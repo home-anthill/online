@@ -1,4 +1,5 @@
 use futures::StreamExt;
+use pretty_assertions::assert_eq;
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value, aio::MultiplexedConnection};
 use std::collections::HashMap;
 
@@ -23,13 +24,8 @@ pub async fn get_fcmtoken_by_uuid(db: &MultiplexedConnection, db_key: &str) -> S
 pub async fn insert_online(db: &MultiplexedConnection, db_key: &str, api_token: &str, date: u128) {
     let mut conn = (*db).clone();
     // fill db with a sensor with default zero value
-    let _: Value = conn
-        .hset_multiple(
-            db_key,
-            &[("apiToken", api_token), ("createdAt", date.to_string().as_str())],
-        )
-        .await
-        .unwrap();
+    let _: Value =
+        conn.hset_multiple(db_key, &[("apiToken", api_token), ("createdAt", date.to_string().as_str())]).await.unwrap();
     // read from db
     let is_exists: Value = conn.exists(db_key).await.unwrap();
     assert_eq!(is_exists, Value::Int(1));

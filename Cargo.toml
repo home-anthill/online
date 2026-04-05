@@ -19,15 +19,20 @@ opt-level = 3
 panic = "abort"
 
 [dependencies]
-rocket = { version = "0.5.1", features = ["uuid", "secrets", "json"] }
-rocket_db_pools = { version = "0.2.0", features = ["deadpool_redis"] }
+rocket = { version = "^0.5.1", features = ["uuid", "secrets", "json"] }
+rocket_db_pools = { version = "^0.2.0", features = ["deadpool_redis"] }
 futures = "^0.3.32"
+uuid = { version = "^1.23.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
+subtle = "^2.6.1"
 # error handling
-thiserror = "2.0.18"
+thiserror = "^2.0.18"
 # logger
 tracing = "^0.1.44"
 tracing-appender = "^0.2.4"
 tracing-subscriber = { version = "^0.3.22", features = ["env-filter"] }
+# env vars
+dotenvy = "^0.15.7"
+envy = "^0.4.2"
 
 # To use Serialize and Deserialize traits, you must include Serde.
 # The "derive" feature is only required when
@@ -37,10 +42,9 @@ serde = { version = "^1.0.228", features = ["derive"] }
 serde_json = "^1.0.149"
 
 [dev-dependencies]
-uuid = { version = "1.22.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
 # better looking rust assertions
 pretty_assertions = "^1.4.1"
 # include also serde_json with the feature 'preserve_order' to don't change the order of keys
 # 'preserve_order' is required to compare results in a predictible way in testing
 serde_json = { version = "^1.0.149", features = ["preserve_order"] }
-test-log = {version = "0.2.19", features = ["trace"]}
+test-log = {version = "^0.2.19", features = ["trace"]}

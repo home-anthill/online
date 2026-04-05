@@ -1,6 +1,4 @@
-#[macro_use]
-extern crate rocket;
-
+#![allow(clippy::uninlined_format_args)]
 pub mod catchers;
 pub mod config;
 pub mod db;

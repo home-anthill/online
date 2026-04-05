@@ -1,154 +1,143 @@
 use std::collections::HashMap;
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rocket::http::Status;
 use rocket::serde::json::{Json, json};
 use rocket_db_pools::Connection;
-use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value};
+use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
 use crate::db::RedisPool;
-use crate::db::online::{find_all, from_uuid_to_db_key, get_date_field_by_name};
-use crate::errors::api_error::{ApiError, ApiResponse};
-use crate::errors::db_error::DbError;
+use crate::db::online::{from_uuid_to_db_key, get_date_field_by_name, update_fcm_token_by_api_token};
+use crate::errors::api_error::ApiResponse;
 use crate::models::inputs::InitFCMTTokenInput;
-use crate::models::online::Online;
+
+const MAX_FCM_TOKEN_LEN: usize = 512;
+
+fn error_response(status: Status, message: &str) -> ApiResponse {
+    ApiResponse { json: json!({ "message": message, "code": status.code }), code: status.code }
+}
 
 /// keepalive
-#[get("/keepalive")]
-pub async fn keep_alive() -> ApiResponse {
-    ApiResponse {
-        json: json!({ "alive": true }),
-        code: Status::Ok.code,
-    }
+#[rocket::get("/keepalive")]
+pub fn keep_alive() -> ApiResponse {
+    ApiResponse { json: json!({ "alive": true }), code: Status::Ok.code }
 }
 
 /// get online value by UUID
-#[get("/online/<device_uuid>/features/<feature_uuid>")]
-pub async fn get_online(db: Connection<RedisPool>, device_uuid: &str, feature_uuid: &str) -> ApiResponse {
-    info!(target: "app", "REST - GET - get_online called with device_uuid = {}, feature_uuid = {}", device_uuid, feature_uuid);
-    let mut con = db.clone();
+#[rocket::get("/online/<device_uuid>/features/<feature_uuid>")]
+pub async fn get_online(mut db: Connection<RedisPool>, device_uuid: Uuid, feature_uuid: Uuid) -> ApiResponse {
+    info!(target: "app", "REST - GET - get_online called");
 
-    let db_key = from_uuid_to_db_key(device_uuid, feature_uuid);
+    let db_key = from_uuid_to_db_key(&device_uuid.to_string(), &feature_uuid.to_string());
     debug!(target: "app", "REST - GET - get_online - db_key = {:?}", db_key);
 
-    let is_exists: Value = con.exists(&db_key).await.unwrap();
-    if is_exists != Value::Int(1) {
-        error!(target: "app", "REST - GET - get_online - not found");
-        return ApiResponse {
-            json: serde_json::to_value(ApiError {
-                message: "Not found error".to_string(),
-                code: Status::NotFound.code,
-            })
-            .unwrap(),
-            code: Status::NotFound.code,
-        };
-    }
-
-    let value: HashMap<String, String> = con.hgetall(&db_key).await.unwrap();
-    debug!(target: "app", "REST - GET - get_online - value = {:?}", &value);
-
-    let api_token: Result<&str, DbError> = match &value.get("apiToken") {
-        Some(val) => Ok(val),
-        None => Err(DbError::DbNotFound),
+    let is_exists: bool = match db.exists(&db_key).await {
+        Ok(val) => val,
+        Err(e) => {
+            error!(target: "app", "REST - GET - get_online - Redis exists error: {}", e);
+            return error_response(Status::InternalServerError, "Database error");
+        }
     };
-    let created_at: Result<u128, DbError> = get_date_field_by_name(&value, "createdAt");
-    let modified_at: Result<u128, DbError> = get_date_field_by_name(&value, "modifiedAt");
+    if !is_exists {
+        error!(target: "app", "REST - GET - get_online - not found");
+        return error_response(Status::NotFound, "Not found error");
+    }
 
-    if api_token.is_err() {
-        error!(target: "app", "REST - GET - get_online - apiToken is missing");
-        return ApiResponse {
-            json: serde_json::to_value(ApiError {
-                message: "ApiToken is missing in db object".to_string(),
-                code: Status::InternalServerError.code,
-            })
-            .unwrap(),
-            code: Status::InternalServerError.code,
-        };
+    let value: HashMap<String, String> = match db.hgetall(&db_key).await {
+        Ok(val) => val,
+        Err(e) => {
+            error!(target: "app", "REST - GET - get_online - Redis hgetall error: {}", e);
+            return error_response(Status::InternalServerError, "Database error");
+        }
+    };
+    debug!(target: "app", "REST - GET - get_online - value retrieved");
+
+    // Validate that required fields are present; return 404 to avoid revealing
+    // whether a key exists but has corrupt data.
+    if !value.contains_key("apiToken") {
+        error!(target: "app", "REST - GET - get_online - apiToken field missing");
+        return error_response(Status::NotFound, "Not found");
     }
-    if created_at.is_err() || modified_at.is_err() {
-        error!(target: "app", "REST - GET - get_online - cannot parse dates");
-        return ApiResponse {
-            json: serde_json::to_value(ApiError {
-                message: "Cannot parse dates".to_string(),
-                code: Status::InternalServerError.code,
-            })
-            .unwrap(),
-            code: Status::InternalServerError.code,
-        };
-    }
+    let created_at = match get_date_field_by_name(&value, "createdAt") {
+        Ok(val) => val,
+        Err(_) => {
+            error!(target: "app", "REST - GET - get_online - cannot parse createdAt");
+            return error_response(Status::NotFound, "Not found");
+        }
+    };
+    let modified_at = match get_date_field_by_name(&value, "modifiedAt") {
+        Ok(val) => val,
+        Err(_) => {
+            error!(target: "app", "REST - GET - get_online - cannot parse modifiedAt");
+            return error_response(Status::NotFound, "Not found");
+        }
+    };
+
+    let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+
     ApiResponse {
         json: json!({
-            "apiToken": api_token.unwrap(),
-            "createdAt": created_at.unwrap(),
-            "modifiedAt": modified_at.unwrap(),
-            "currentTime": UNIX_EPOCH.elapsed().unwrap().as_millis()
+            "createdAt": created_at,
+            "modifiedAt": modified_at,
+            "currentTime": current_time
         }),
         code: Status::Ok.code,
     }
 }
 
 /// delete online to prevent infinite notifications
-#[delete("/online/<device_uuid>/features/<feature_uuid>")]
-pub async fn delete_online(db: Connection<RedisPool>, device_uuid: &str, feature_uuid: &str) -> ApiResponse {
-    info!(target: "app", "REST - DELETE - delete_online called device_uuid = {}, feature_uuid = {}", device_uuid, feature_uuid);
-    let mut con = db.clone();
+#[rocket::delete("/online/<device_uuid>/features/<feature_uuid>")]
+pub async fn delete_online(mut db: Connection<RedisPool>, device_uuid: Uuid, feature_uuid: Uuid) -> ApiResponse {
+    info!(target: "app", "REST - DELETE - delete_online called");
 
-    let db_key = from_uuid_to_db_key(device_uuid, feature_uuid);
+    let db_key = from_uuid_to_db_key(&device_uuid.to_string(), &feature_uuid.to_string());
     debug!(target: "app", "REST - DELETE - delete_online - db_key = {:?}", db_key);
 
-    let is_exists: Value = con.exists(&db_key).await.unwrap();
-    if is_exists != Value::Int(1) {
+    let is_exists: bool = match db.exists(&db_key).await {
+        Ok(val) => val,
+        Err(e) => {
+            error!(target: "app", "REST - DELETE - delete_online - Redis exists error: {}", e);
+            return error_response(Status::InternalServerError, "Database error");
+        }
+    };
+    if !is_exists {
         info!(target: "app", "REST - DELETE - delete_online - already don't exist");
-        return ApiResponse {
-            json: json!({}),
-            code: Status::Ok.code,
-        };
+        return ApiResponse { json: json!({}), code: Status::Ok.code };
     }
 
-    let res: u64 = con.del(&db_key).await.unwrap();
+    let res: u64 = match db.del(&db_key).await {
+        Ok(val) => val,
+        Err(e) => {
+            error!(target: "app", "REST - DELETE - delete_online - Redis del error: {}", e);
+            return error_response(Status::InternalServerError, "Database error");
+        }
+    };
     if res != 1 {
         error!(target: "app", "REST - DELETE - delete_online - cannot delete online");
-        return ApiResponse {
-            json: serde_json::to_value(ApiError {
-                message: "Cannot delete error".to_string(),
-                code: Status::InternalServerError.code,
-            })
-            .unwrap(),
-            code: Status::InternalServerError.code,
-        };
+        return error_response(Status::InternalServerError, "Cannot delete error");
     }
-    ApiResponse {
-        json: json!({}),
-        code: Status::Ok.code,
-    }
+    ApiResponse { json: json!({}), code: Status::Ok.code }
 }
 
 /// init fcm token
-#[post("/fcmtoken", data = "<input>")]
-pub async fn post_init_fcmtoken(db: Connection<RedisPool>, input: Json<InitFCMTTokenInput>) -> ApiResponse {
+#[rocket::post("/fcmtoken", format = "json", data = "<input>")]
+pub async fn post_init_fcmtoken(mut db: Connection<RedisPool>, input: Json<InitFCMTTokenInput>) -> ApiResponse {
     info!(target: "app", "REST - POST - post_init_fcmtoken");
-    let mut con = db.clone();
 
-    // get all elements based on apiToken
-    let onlines: Vec<Online> = find_all(&con)
-        .await
-        .into_iter()
-        .filter(|o| o.apiToken == input.apiToken)
-        .collect();
-    for online in &onlines {
-        debug!(target: "app", "REST - POST - post_init_fcmtoken - online = {:?}", &online);
-        let _: Value = con
-            .hset_multiple(
-                from_uuid_to_db_key(online.deviceUuid.as_str(), online.featureUuid.as_str()),
-                &[("fcmToken", input.fcmToken.as_str())],
-            )
-            .await
-            .unwrap();
+    let api_token = match Uuid::parse_str(&input.api_token) {
+        Ok(val) => val.to_string(),
+        Err(_) => return error_response(Status::BadRequest, "Invalid apiToken"),
+    };
+    if input.fcm_token.is_empty() || input.fcm_token.len() > MAX_FCM_TOKEN_LEN {
+        return error_response(Status::BadRequest, "Invalid fcmToken");
     }
 
-    ApiResponse {
-        json: json!({}),
-        code: Status::Ok.code,
+    if let Err(e) = update_fcm_token_by_api_token(&mut db, &api_token, &input.fcm_token).await {
+        error!(target: "app", "REST - POST - post_init_fcmtoken - update failed: {}", e);
+        return error_response(Status::InternalServerError, "Database error");
     }
+
+    ApiResponse { json: json!({}), code: Status::Ok.code }
 }

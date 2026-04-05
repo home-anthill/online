@@ -10,9 +10,9 @@ use online::config::init;
 use online::db::RedisPool;
 use online::routes;
 
-#[launch]
+#[rocket::launch]
 fn rocket() -> Rocket<Build> {
-    // 1. Init logger
+    // 1. Init logger and env
     init();
 
     // 2. Init Rocket
@@ -37,6 +37,7 @@ fn rocket() -> Rocket<Build> {
                 catchers::bad_request,
                 catchers::not_found,
                 catchers::internal_server_error,
+                catchers::service_unavailable,
             ],
         )
 }
