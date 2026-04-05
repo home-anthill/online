@@ -1,5 +1,16 @@
 # Changelog (AI-assisted changes)
 
+## [2026-04-05] Redis config via env vars
+
+### Redis URL sourced from `.env` instead of `Rocket.toml`
+`REDIS_URI`, `REDIS_USERNAME`, `REDIS_PASSWORD` added to `.env_template` (and `.env`). Credentials
+are URL-encoded and injected into the URI at startup using the same pattern as `online-alarm`.
+`main.rs` now uses `rocket::custom(figment)` with `figment.merge(("databases.redis_pool.url", …))`
+so `rocket_db_pools` picks up the programmatically built URL; the `[default.databases.redis_pool]`
+section has been removed from `Rocket.toml`. All route handlers and tests are unchanged.
+`urlencoding = "^2.1.3"` added to `Cargo.toml`. `redact_redis_uri` helper added to `config/mod.rs`
+with the same logic as `online-alarm`; custom `Debug` impl updated to redact the password field.
+
 ## [2026-04-02] Security fixes
 
 ### `apiToken` removed from GET response (`src/routes/api.rs`)
