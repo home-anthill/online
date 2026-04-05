@@ -50,6 +50,7 @@ jobs:
         uses: shogo82148/actions-setup-redis@v1
         with:
           redis-version: "8.x"
+          redis-start-args: --user redisuser on ">Password1!" "~*" "+@all"
       - name: Run security audit
         run: cargo audit
       - name: Run tests
