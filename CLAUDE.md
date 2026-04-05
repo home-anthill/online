@@ -43,7 +43,7 @@ All tests are integration tests that require a **real Redis instance** on `local
 - Single test: `ENV=testing RUST_BACKTRACE=full cargo test <test_name> -- --nocapture --test-threads 1`
 - With coverage: `make test-coverage` (generates HTML report in `coverage/html/`)
 
-Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanup and key isolation. Test keys use a `test_` prefix for isolation from development data.
+Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanup and key isolation. Test keys use a `test_` prefix for isolation from development data. Note: test helper functions in `db_utils.rs` connect directly to `redis://localhost:6379` (no credentials) — this works because the CI Redis service has no ACL auth, and the default Redis user remains enabled alongside any named ACL users added locally.
 
 ## Architecture
 
@@ -76,7 +76,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 - `POST /fcmtoken` declares `format = "json"` so Rocket enforces `Content-Type: application/json` at the framework level.
 
 ### DB layer
-- `find_all` and `update_fcm_token_by_api_token` take `&mut MultiplexedConnection` directly — no internal clone. This is more efficient than cloning for every request.
+- `find_all` is defined in `db/online.rs` but is **not called by any route handler** — routes call Redis directly via the `Connection<RedisPool>` auto-deref. `find_all` and `update_fcm_token_by_api_token` take `&mut MultiplexedConnection` directly — no internal clone. This is more efficient than cloning for every request.
 - **`update_fcm_token_by_api_token` uses `subtle::ConstantTimeEq` for `apiToken` comparison** to prevent timing side-channel attacks when comparing sensitive tokens.
 - `get_all_keys_pattern()` returns `&'static str` (not `String`) — the function returns compile-time string literals, so heap allocation is unnecessary.
 - `is_testing()` reads `ENV` once via `static IS_TESTING: OnceLock<bool>` — it is cached on first call to avoid repeated `env::var` invocations.
@@ -94,12 +94,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 
 ## Configuration
 
-- **Rocket.toml** — Framework config (port, address, Redis URL per profile).
-  - Local dev Redis URL uses ACL authentication: `redis://redisuser:Password1!@localhost:6379`
-  - In production (Kubernetes), the URL is injected via the Helm ConfigMap
-  - For TLS in production, use `rediss://username:password@host:6380`
-  - Debug profile listens on port 8089; release profile listens on 0.0.0.0:80
-  - **Do NOT commit hardcoded secret keys to `Rocket.toml`** — use the `ROCKET_SECRET_KEY` environment variable instead
+- **Rocket.toml** — Framework config (port, address). Debug profile listens on port 8089; release profile listens on `0.0.0.0:80`. The `databases.redis_pool.url` entry here is overridden at runtime by the URL built from env vars (see `.env_template` below). **Do NOT commit hardcoded secret keys to `Rocket.toml`** — use the `ROCKET_SECRET_KEY` env var instead. For production TLS, set `REDIS_URI=rediss://host:6380` (double-s scheme).
 
 - **`ROCKET_SECRET_KEY`** environment variable
   - Required for the release profile (Rocket 0.5 automatically reads this)
@@ -109,7 +104,13 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 
 - **rustfmt.toml** — Max width 120, 4-space indent, hard tabs disabled
 
-- **.env_template** — Contains `LOG_LEVEL=debug` for local development. Copy to `.env` on first setup; do not commit `.env` itself (contains secrets in production).
+- **.env_template** — Copy to `.env` on first setup; do not commit `.env` itself. Contains four variables:
+  - `LOG_LEVEL=debug`
+  - `REDIS_URI=redis://localhost:6379`
+  - `REDIS_USERNAME=redisuser`
+  - `REDIS_PASSWORD=Password1!`
+
+  At startup, `main.rs` reads these via the `Env` struct (`config/mod.rs`), builds the authenticated Redis URL (`redis://username:password@host:port`), and injects it into Rocket's figment via `figment.merge(("databases.redis_pool.url", redis_url))` — overriding the URL in `Rocket.toml`. If `REDIS_PASSWORD` is empty, no credentials are injected and the URI is used as-is.
 
 ## Security Considerations
 
