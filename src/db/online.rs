@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures::StreamExt;
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, aio::MultiplexedConnection};
@@ -107,9 +108,17 @@ pub async fn update_fcm_token_by_api_token(
                 continue;
             }
         };
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis().to_string();
         let tokens_match: bool =
             stored_token.as_deref().map(|t| t.as_bytes().ct_eq(api_token.as_bytes()).into()).unwrap_or(false);
-        if tokens_match && let Err(e) = db.hset_multiple::<_, _, _, ()>(&db_key, &[("fcmToken", fcm_token)]).await {
+        if tokens_match
+            && let Err(e) = db
+                .hset_multiple::<_, _, _, ()>(
+                    &db_key,
+                    &[("fcmToken", fcm_token), ("fcmTokenTimestamp", timestamp.as_str())],
+                )
+                .await
+        {
             error!(target: "app", "update_fcm_token_by_api_token - Failed to update fcmToken for key {}: {}", db_key, e);
         }
     }
