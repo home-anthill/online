@@ -3,6 +3,8 @@ use pretty_assertions::assert_eq;
 use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, Value, aio::MultiplexedConnection};
 use std::collections::HashMap;
 
+const FCM_BY_API_TOKEN_KEY: &str = "fcm_by_api_token";
+
 pub async fn drop_all_test_keys(db: &MultiplexedConnection) {
     let mut conn = (*db).clone();
     let values = conn.scan_match::<&str, String>("test_*").await.unwrap();
@@ -19,6 +21,16 @@ pub async fn get_fcmtoken_by_uuid(db: &MultiplexedConnection, db_key: &str) -> S
         return "".to_owned();
     }
     conn.hget(db_key, "fcmToken").await.unwrap()
+}
+
+pub async fn get_cached_fcmtoken_by_api_token(db: &MultiplexedConnection, api_token: &str) -> Option<String> {
+    let mut conn = (*db).clone();
+    conn.hget(FCM_BY_API_TOKEN_KEY, api_token).await.unwrap()
+}
+
+pub async fn delete_cached_fcmtoken_by_api_token(db: &MultiplexedConnection, api_token: &str) {
+    let mut conn = (*db).clone();
+    conn.hdel::<_, _, u128>(FCM_BY_API_TOKEN_KEY, api_token).await.unwrap();
 }
 
 pub async fn insert_online(db: &MultiplexedConnection, db_key: &str, api_token: &str, date: u128) {

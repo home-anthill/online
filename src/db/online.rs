@@ -11,6 +11,8 @@ use tracing::{error, info};
 use crate::errors::db_error::DbError;
 use crate::models::online::Online;
 
+const FCM_BY_API_TOKEN_KEY: &str = "fcm_by_api_token";
+
 static IS_TESTING: OnceLock<bool> = OnceLock::new();
 
 fn is_testing() -> bool {
@@ -92,6 +94,11 @@ pub async fn update_fcm_token_by_api_token(
     api_token: &str,
     fcm_token: &str,
 ) -> Result<(), DbError> {
+    if let Err(e) = db.hset::<_, _, _, ()>(FCM_BY_API_TOKEN_KEY, api_token, fcm_token).await {
+        error!(target: "app", "update_fcm_token_by_api_token - Failed to cache fcmToken by apiToken: {}", e);
+        return Err(DbError::DbScanError);
+    }
+
     let db_keys: Vec<String> = match db.scan_match::<&str, String>(get_all_keys_pattern()).await {
         Ok(stream) => stream.collect().await,
         Err(e) => {

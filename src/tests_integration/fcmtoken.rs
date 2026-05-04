@@ -7,7 +7,10 @@ use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
 use uuid::Uuid;
 
-use crate::tests_integration::db_utils::{drop_all_test_keys, get_fcmtoken_by_uuid, insert_online};
+use crate::tests_integration::db_utils::{
+    delete_cached_fcmtoken_by_api_token, drop_all_test_keys, get_cached_fcmtoken_by_api_token, get_fcmtoken_by_uuid,
+    insert_online,
+};
 use online::models::inputs::InitFCMTTokenInput;
 
 #[rocket::async_test]
@@ -29,6 +32,7 @@ async fn post_fcmtoken() {
     let db_key: String = "test_".to_owned() + &device_uuid + "_feature_" + &feature_uuid;
     let api_token: String = Uuid::new_v4().to_string();
     let date: u128 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+    delete_cached_fcmtoken_by_api_token(&con, &api_token).await;
     // insert in db
     insert_online(&con, &db_key, &api_token, date).await;
 
@@ -44,7 +48,10 @@ async fn post_fcmtoken() {
     // read from db to check if fcmToken has been set
     let fcm_token_db: String = get_fcmtoken_by_uuid(&con, &db_key).await;
     assert_eq!(fcm_token_db, fcm_token);
+    let cached_fcm_token: Option<String> = get_cached_fcmtoken_by_api_token(&con, &api_token).await;
+    assert_eq!(cached_fcm_token.as_deref(), Some(fcm_token.as_str()));
 
     // cleanup
     drop_all_test_keys(&con).await;
+    delete_cached_fcmtoken_by_api_token(&con, &api_token).await;
 }
