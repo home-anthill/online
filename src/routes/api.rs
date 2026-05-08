@@ -9,9 +9,9 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::db::RedisPool;
-use crate::db::online::{from_uuid_to_db_key, get_date_field_by_name, update_fcm_token_by_api_token};
+use crate::db::online::{from_uuid_to_db_key, get_date_field_by_name, rotate_api_token, update_fcm_token_by_api_token};
 use crate::errors::api_error::ApiResponse;
-use crate::models::inputs::InitFCMTTokenInput;
+use crate::models::inputs::{InitFCMTTokenInput, RotateApiTokenInput};
 
 const MAX_FCM_TOKEN_LEN: usize = 512;
 
@@ -136,6 +136,41 @@ pub async fn post_init_fcmtoken(mut db: Connection<RedisPool>, input: Json<InitF
 
     if let Err(e) = update_fcm_token_by_api_token(&mut db, &api_token, &input.fcm_token).await {
         error!(target: "app", "REST - POST - post_init_fcmtoken - update failed: {}", e);
+        return error_response(Status::InternalServerError, "Database error");
+    }
+
+    ApiResponse { json: json!({}), code: Status::Ok.code }
+}
+
+/// rotate apiToken references stored in Redis online state
+#[rocket::post("/api-token/rotate", format = "json", data = "<input>")]
+pub async fn post_rotate_api_token(mut db: Connection<RedisPool>, input: Json<RotateApiTokenInput>) -> ApiResponse {
+    info!(target: "app", "REST - POST - post_rotate_api_token");
+
+    let old_api_token = match Uuid::parse_str(&input.old_api_token) {
+        Ok(val) => val.to_string(),
+        Err(_) => return error_response(Status::BadRequest, "Invalid oldApiToken"),
+    };
+    let new_api_token = match Uuid::parse_str(&input.new_api_token) {
+        Ok(val) => val.to_string(),
+        Err(_) => return error_response(Status::BadRequest, "Invalid newApiToken"),
+    };
+
+    let mut device_features = Vec::with_capacity(input.device_features.len());
+    for device_feature in &input.device_features {
+        let device_uuid = match Uuid::parse_str(&device_feature.device_uuid) {
+            Ok(val) => val.to_string(),
+            Err(_) => return error_response(Status::BadRequest, "Invalid deviceUuid"),
+        };
+        let feature_uuid = match Uuid::parse_str(&device_feature.feature_uuid) {
+            Ok(val) => val.to_string(),
+            Err(_) => return error_response(Status::BadRequest, "Invalid featureUuid"),
+        };
+        device_features.push((device_uuid, feature_uuid));
+    }
+
+    if let Err(e) = rotate_api_token(&mut db, &old_api_token, &new_api_token, &device_features).await {
+        error!(target: "app", "REST - POST - post_rotate_api_token - update failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
 

@@ -49,13 +49,14 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 
 **Single-crate Rust service** with these modules under `src/`:
 
-- **routes/api.rs** — All 4 REST endpoints:
+- **routes/api.rs** — All 5 REST endpoints:
   - `GET /keepalive` — health check
   - `GET /online/{device_uuid}/features/{feature_uuid}` — returns `createdAt`, `modifiedAt`, `currentTime` (intentionally omits `apiToken` from response)
   - `DELETE /online/{device_uuid}/features/{feature_uuid}` — delete online record; returns `200 {}` even if not found
   - `POST /fcmtoken` — set FCM token for devices matching an apiToken (requires `Content-Type: application/json`)
+  - `POST /api-token/rotate` — internal endpoint used by `api-server` after profile token regeneration; updates the supplied device/feature Redis hashes and moves `fcm_by_api_token` from stale token fields to the new token
 - **db/online.rs** — Redis operations (HGETALL, HSET, HGET, DEL, EXISTS, SCAN). Key format: `online_{device_uuid}_feature_{feature_uuid}`
-- **models/** — `Online` (6-field struct) and `InitFCMTTokenInput` (request body for fcmtoken)
+- **models/** — `Online` (6-field struct), `InitFCMTTokenInput` (request body for fcmtoken), and `RotateApiTokenInput` (internal token-rotation request)
 - **errors/** — `ApiError`/`ApiResponse` responders, `DbError` (thiserror) enums
 - **catchers/** — HTTP error catchers (400, 404, 500, 503)
 - **config/** — Tracing logger setup with daily-rotating file appenders (disabled when `ENV=testing`)
@@ -74,6 +75,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 - Handlers take `mut db: Connection<RedisPool>` and call Redis commands directly via auto-deref (no `db.clone()`). When passing the connection to a `db/` function, use `&mut db`.
 - `POST /fcmtoken` validates `apiToken` by parsing it as `uuid::Uuid` (not just checking length); `fcmToken` is checked against `MAX_FCM_TOKEN_LEN = 512`.
 - `POST /fcmtoken` declares `format = "json"` so Rocket enforces `Content-Type: application/json` at the framework level.
+- `POST /api-token/rotate` validates `oldApiToken`, `newApiToken`, and each supplied `deviceFeatures[]` UUID pair. When device/features are supplied, it updates those existing online hashes regardless of their currently stored stale token and deletes the stale `fcm_by_api_token` field discovered from each hash.
 
 ### DB layer
 - `find_all` is defined in `db/online.rs` but is **not called by any route handler** — routes call Redis directly via the `Connection<RedisPool>` auto-deref. `find_all` and `update_fcm_token_by_api_token` take `&mut MultiplexedConnection` directly — no internal clone. This is more efficient than cloning for every request.
@@ -81,6 +83,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 - `get_all_keys_pattern()` returns `&'static str` (not `String`) — the function returns compile-time string literals, so heap allocation is unnecessary.
 - `is_testing()` reads `ENV` once via `static IS_TESTING: OnceLock<bool>` — it is cached on first call to avoid repeated `env::var` invocations.
 - Redis keys use the pattern `online_{device_uuid}_feature_{feature_uuid}` and store data as Redis hashes containing fields: `apiToken`, `deviceUuid`, `featureUuid`, `fcmToken`, `createdAt`, `modifiedAt`.
+- Online Redis hashes must always contain `modifiedAt`. On creation, `createdAt` and `modifiedAt` are set to the same timestamp; on update, `createdAt` is preserved and `modifiedAt` changes.
 
 ### Logging & Security
 - Production log level is `INFO`. `debug!` lines (containing device/feature UUIDs) are compiled in but filtered at runtime and never reach rolling log files.
@@ -121,6 +124,7 @@ This service handles sensitive credentials (`apiToken`, `fcmToken`) that are nev
 3. **Never log credentials** — Use custom `Debug` impls to redact sensitive fields. Do not add debug-log statements that would print full request bodies or Redis records containing credentials.
 4. **Validate at boundaries** — UUID path parameters and request body tokens are validated by Rocket/Serde before the handler runs, preventing invalid input from reaching the database layer.
 5. **Fail securely** — Corrupt or missing records return `404` (not found) instead of `500` (server error), preventing callers from distinguishing "record does not exist" from "record exists but is malformed".
+6. **Token rotation consistency** — When `api-server` regenerates a profile token, it calls `POST /api-token/rotate` with device/feature UUIDs so Redis plaintext token references and `fcm_by_api_token` do not remain stale, even if Redis no longer matches the profile's previous token.
 
 When modifying this service, assume all credentials are hostile and untrusted — validate early, log minimally, and fail securely.
 

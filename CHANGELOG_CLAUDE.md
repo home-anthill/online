@@ -2,6 +2,16 @@
 
 ## Security
 
+### API token rotation endpoint added
+Added internal `POST /api-token/rotate` support so `api-server` can move Redis online-state `apiToken`
+fields and the `fcm_by_api_token` lookup to a regenerated token. The route validates both tokens and
+the supplied device/feature UUIDs, avoids logging token values, and updates existing targeted online
+hashes even when Redis still contains a stale token from an earlier partial rotation.
+
+### Online Redis timestamp invariant
+Online hashes now always contain `modifiedAt`. On creation, `createdAt` and `modifiedAt` are written
+with the same Unix-ms timestamp; subsequent updates preserve `createdAt` and refresh `modifiedAt`.
+
 ### `apiToken` removed from GET response
 The `GET /online/{device_uuid}/features/{feature_uuid}` endpoint no longer returns the `apiToken`
 field in its JSON response. It was a sensitive credential that had no business being exposed to
