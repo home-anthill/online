@@ -5,6 +5,7 @@ use pretty_assertions::assert_eq;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::tests_integration::db_utils::{
@@ -58,6 +59,32 @@ async fn post_fcmtoken() {
 
 #[rocket::async_test]
 #[test_log::test]
+async fn post_fcmtoken_rejects_invalid_api_token() {
+    let client: Client = Client::tracked(rocket()).await.unwrap();
+    let body = InitFCMTTokenInput { api_token: "not-a-uuid".to_owned(), fcm_token: "mocked_fcm_token".to_owned() };
+
+    let req: LocalRequest = client.post("/fcmtoken").json(&body);
+    let res: LocalResponse = req.dispatch().await;
+
+    assert_eq!(res.status(), Status::BadRequest);
+    assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "message": "Invalid apiToken", "code": 400 }));
+}
+
+#[rocket::async_test]
+#[test_log::test]
+async fn post_fcmtoken_rejects_invalid_fcm_token() {
+    let client: Client = Client::tracked(rocket()).await.unwrap();
+    let body = InitFCMTTokenInput { api_token: Uuid::new_v4().to_string(), fcm_token: String::new() };
+
+    let req: LocalRequest = client.post("/fcmtoken").json(&body);
+    let res: LocalResponse = req.dispatch().await;
+
+    assert_eq!(res.status(), Status::BadRequest);
+    assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "message": "Invalid fcmToken", "code": 400 }));
+}
+
+#[rocket::async_test]
+#[test_log::test]
 async fn post_rotate_api_token_updates_stale_online_hash_and_fcm_lookup() {
     let client: Client = Client::tracked(rocket()).await.unwrap();
     let cfg: Config = Config::from_url("redis://localhost:6379");
@@ -99,4 +126,60 @@ async fn post_rotate_api_token_updates_stale_online_hash_and_fcm_lookup() {
 
     drop_all_test_keys(&con).await;
     delete_cached_fcmtoken_by_api_token(&con, &new_profile_token).await;
+}
+
+#[rocket::async_test]
+#[test_log::test]
+async fn post_rotate_api_token_rejects_invalid_uuids() {
+    let client: Client = Client::tracked(rocket()).await.unwrap();
+    let valid_uuid = Uuid::new_v4().to_string();
+
+    let cases = [
+        (
+            RotateApiTokenInput {
+                old_api_token: "not-a-uuid".to_owned(),
+                new_api_token: valid_uuid.clone(),
+                device_features: vec![],
+            },
+            "Invalid oldApiToken",
+        ),
+        (
+            RotateApiTokenInput {
+                old_api_token: valid_uuid.clone(),
+                new_api_token: "not-a-uuid".to_owned(),
+                device_features: vec![],
+            },
+            "Invalid newApiToken",
+        ),
+        (
+            RotateApiTokenInput {
+                old_api_token: valid_uuid.clone(),
+                new_api_token: valid_uuid.clone(),
+                device_features: vec![RotateApiTokenDeviceFeature {
+                    device_uuid: "not-a-uuid".to_owned(),
+                    feature_uuid: valid_uuid.clone(),
+                }],
+            },
+            "Invalid deviceUuid",
+        ),
+        (
+            RotateApiTokenInput {
+                old_api_token: valid_uuid.clone(),
+                new_api_token: valid_uuid.clone(),
+                device_features: vec![RotateApiTokenDeviceFeature {
+                    device_uuid: valid_uuid.clone(),
+                    feature_uuid: "not-a-uuid".to_owned(),
+                }],
+            },
+            "Invalid featureUuid",
+        ),
+    ];
+
+    for (body, message) in cases {
+        let req: LocalRequest = client.post("/api-token/rotate").json(&body);
+        let res: LocalResponse = req.dispatch().await;
+
+        assert_eq!(res.status(), Status::BadRequest);
+        assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "message": message, "code": 400 }));
+    }
 }

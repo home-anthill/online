@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.0.1
+
+### Tests
+
+- Added `POST /fcmtoken` integration tests for invalid `apiToken` and empty `fcmToken` request
+  bodies, asserting the expected `400` JSON errors.
+- Added `POST /api-token/rotate` integration tests for invalid `oldApiToken`, `newApiToken`,
+  `deviceUuid`, and `featureUuid` values.
+- Added `GET /online/{device_uuid}/features/{feature_uuid}` integration tests for missing Redis
+  records and corrupt records with missing `apiToken` or invalid `createdAt`, asserting secure
+  `404` responses.
+- Added `DELETE /online/{device_uuid}/features/{feature_uuid}` coverage for idempotent deletion
+  when the Redis record is already missing.
+- Added a Redis test helper for inserting partial online hashes so corrupt-record scenarios can be
+  covered directly.
+
 ## 3.0.0
 
 ### Features

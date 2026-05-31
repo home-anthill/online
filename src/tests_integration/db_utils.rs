@@ -64,6 +64,14 @@ pub async fn insert_online(db: &MultiplexedConnection, db_key: &str, api_token: 
     assert_eq!(modified_at, created_at);
 }
 
+pub async fn insert_online_fields(db: &MultiplexedConnection, db_key: &str, fields: &[(&str, &str)]) {
+    let mut conn = (*db).clone();
+    conn.hset_multiple::<_, _, _, ()>(db_key, fields).await.unwrap();
+
+    let is_exists: Value = conn.exists(db_key).await.unwrap();
+    assert_eq!(is_exists, Value::Int(1));
+}
+
 pub async fn set_fcmtoken_for_online(db: &MultiplexedConnection, db_key: &str, fcm_token: &str) {
     let mut conn = (*db).clone();
     conn.hset::<_, _, _, ()>(db_key, "fcmToken", fcm_token).await.unwrap();
