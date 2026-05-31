@@ -34,6 +34,7 @@ impl AppEnv {
 pub struct Env {
     pub log_level: Option<String>,
     pub redis_uri: String,
+    pub notifications_redis_uri: String,
     #[serde(default)]
     pub redis_username: String,
     #[serde(default)]
@@ -45,6 +46,7 @@ impl fmt::Debug for Env {
         f.debug_struct("Env")
             .field("log_level", &self.log_level)
             .field("redis_uri", &redact_redis_uri(&self.redis_uri))
+            .field("notifications_redis_uri", &redact_redis_uri(&self.notifications_redis_uri))
             .field("redis_username", &self.redis_username)
             .field("redis_password", &"***")
             .finish()
@@ -117,6 +119,7 @@ pub fn init() -> (Env, AppEnv) {
 fn print_env(env: &Env) {
     info!(target: "app", "log_level = {}", env.log_level.as_deref().unwrap_or("debug"));
     info!(target: "app", "redis_uri = {}", redact_redis_uri(&env.redis_uri));
+    info!(target: "app", "notifications_redis_uri = {}", redact_redis_uri(&env.notifications_redis_uri));
     info!(target: "app", "redis_username = {}", env.redis_username);
     info!(target: "app", "redis_password = {}", !env.redis_password.is_empty());
 }

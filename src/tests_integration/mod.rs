@@ -3,6 +3,7 @@ use super::rocket;
 mod errors_catchers;
 mod fcmtoken;
 mod keepalive;
+mod notification;
 mod online;
 
 // test utils

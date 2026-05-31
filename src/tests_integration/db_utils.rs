@@ -42,6 +42,47 @@ pub async fn delete_cached_fcmtoken_by_api_token(db: &MultiplexedConnection, api
     conn.hdel::<_, _, u128>(FCM_BY_API_TOKEN_KEY, api_token).await.unwrap();
 }
 
+pub async fn delete_notifications_by_api_token(db: &MultiplexedConnection, api_token: &str) {
+    let mut conn = (*db).clone();
+    let index_key = format!("notifications:by_api_token:{api_token}");
+    let ids: Vec<String> = conn.zrange(&index_key, 0, -1).await.unwrap();
+    for id in &ids {
+        conn.del::<_, u128>(format!("notification:{id}")).await.unwrap();
+    }
+    conn.del::<_, u128>(index_key).await.unwrap();
+}
+
+pub async fn insert_notification_for_api_token(
+    db: &MultiplexedConnection,
+    api_token: &str,
+    id: &str,
+    sent_at: u64,
+    title: &str,
+    body: &str,
+    devices: &str,
+) {
+    let mut conn = (*db).clone();
+    let notification_key = format!("notification:{id}");
+    let index_key = format!("notifications:by_api_token:{api_token}");
+    conn.hset_multiple::<_, _, _, ()>(
+        &notification_key,
+        &[
+            ("id", id),
+            ("sentAt", &sent_at.to_string()),
+            ("title", title),
+            ("body", body),
+            ("deviceCount", "1"),
+            ("devices", devices),
+            ("provider", "fcm"),
+            ("providerMessageId", "projects/home-anthill/messages/message-a"),
+            ("apiToken", api_token),
+        ],
+    )
+    .await
+    .unwrap();
+    conn.zadd::<_, _, _, ()>(index_key, id, sent_at).await.unwrap();
+}
+
 pub async fn insert_online(db: &MultiplexedConnection, db_key: &str, api_token: &str, date: u128) {
     let mut conn = (*db).clone();
     // fill db with a sensor with default zero value

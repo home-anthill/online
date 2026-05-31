@@ -109,7 +109,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 
 - **.env_template** — Copy to `.env` on first setup; do not commit `.env` itself. Contains four variables:
   - `LOG_LEVEL=debug`
-  - `REDIS_URI=redis://localhost:6379`
+  - `REDIS_URI=redis://localhost:6379/0`
   - `REDIS_USERNAME=redisuser`
   - `REDIS_PASSWORD=Password1!`
 
