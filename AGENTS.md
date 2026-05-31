@@ -140,7 +140,7 @@ Triggers on `master`, `develop`, `ft**` branches, pull requests to `master`/`dev
 
 ## Changelog & Recent Improvements
 
-See `CHANGELOG_CLAUDE.md` for a detailed history of AI-assisted improvements, including:
+See `CHANGELOG.md` for a detailed history of project changes, including:
 - **Security fixes** (April 2026) — removed credential leakage from responses and logs, added constant-time token comparison, improved validation
 - **Idiomatic Rust refactors** — eliminated unnecessary allocations (`OnceLock` for cached config, `&'static str` for literal patterns), removed internal clones in DB functions, refactored models to use `snake_case` fields with serde `rename_all`
 - **Redis authentication support** — switched from legacy Redis default user to named ACL user for local dev and production

@@ -2,6 +2,12 @@
 
 ## 3.0.1
 
+### Features
+
+- Added repository-specific `AGENTS.md` guidance for coding agents, covering the service
+  architecture, Redis-backed integration test setup, security conventions, configuration, and
+  CI/CD workflow.
+
 ### Tests
 
 - Added `POST /fcmtoken` integration tests for invalid `apiToken` and empty `fcmToken` request
