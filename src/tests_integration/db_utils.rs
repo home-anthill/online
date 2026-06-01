@@ -52,6 +52,17 @@ pub async fn delete_notifications_by_api_token(db: &MultiplexedConnection, api_t
     conn.del::<_, u128>(index_key).await.unwrap();
 }
 
+pub async fn get_notification_ids_by_api_token(db: &MultiplexedConnection, api_token: &str) -> Vec<String> {
+    let mut conn = (*db).clone();
+    let index_key = format!("notifications:by_api_token:{api_token}");
+    conn.zrange(index_key, 0, -1).await.unwrap()
+}
+
+pub async fn get_notification_hash(db: &MultiplexedConnection, id: &str) -> HashMap<String, String> {
+    let mut conn = (*db).clone();
+    conn.hgetall(format!("notification:{id}")).await.unwrap()
+}
+
 pub async fn insert_notification_for_api_token(
     db: &MultiplexedConnection,
     api_token: &str,
@@ -76,6 +87,7 @@ pub async fn insert_notification_for_api_token(
             ("provider", "fcm"),
             ("providerMessageId", "projects/home-anthill/messages/message-a"),
             ("apiToken", api_token),
+            ("apiTokens", &format!(r#"["{api_token}"]"#)),
         ],
     )
     .await

@@ -9,8 +9,9 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::tests_integration::db_utils::{
-    delete_cached_fcmtoken_by_api_token, drop_all_test_keys, get_api_token_by_uuid, get_cached_fcmtoken_by_api_token,
-    get_fcmtoken_by_uuid, insert_online, set_fcmtoken_for_online,
+    delete_cached_fcmtoken_by_api_token, delete_notifications_by_api_token, drop_all_test_keys, get_api_token_by_uuid,
+    get_cached_fcmtoken_by_api_token, get_fcmtoken_by_uuid, get_notification_hash, get_notification_ids_by_api_token,
+    insert_notification_for_api_token, insert_online, set_fcmtoken_for_online,
 };
 use online::models::inputs::{InitFCMTTokenInput, RotateApiTokenDeviceFeature, RotateApiTokenInput};
 
@@ -126,6 +127,78 @@ async fn post_rotate_api_token_updates_stale_online_hash_and_fcm_lookup() {
 
     drop_all_test_keys(&con).await;
     delete_cached_fcmtoken_by_api_token(&con, &new_profile_token).await;
+}
+
+#[rocket::async_test]
+#[test_log::test]
+async fn post_rotate_api_token_migrates_notification_history_to_new_api_token() {
+    let client: Client = Client::tracked(rocket()).await.unwrap();
+    let cfg: Config = Config::from_url("redis://localhost:6379/1");
+    let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let connection: Connection = pool.get().await.unwrap();
+    let notifications_con: MultiplexedConnection = connection.clone();
+
+    let old_profile_token = Uuid::new_v4().to_string();
+    let new_profile_token = Uuid::new_v4().to_string();
+    delete_notifications_by_api_token(&notifications_con, &old_profile_token).await;
+    delete_notifications_by_api_token(&notifications_con, &new_profile_token).await;
+
+    let old_devices = json!([{
+        "deviceUuid": Uuid::new_v4().to_string(),
+        "featureUuid": Uuid::new_v4().to_string(),
+        "createdAt": 1710000000001u64,
+        "modifiedAt": 1710000000002u64,
+    }])
+    .to_string();
+    let new_devices = json!([{
+        "deviceUuid": Uuid::new_v4().to_string(),
+        "featureUuid": Uuid::new_v4().to_string(),
+        "createdAt": 1710000000003u64,
+        "modifiedAt": 1710000000004u64,
+    }])
+    .to_string();
+    insert_notification_for_api_token(
+        &notifications_con,
+        &old_profile_token,
+        "test-notification-old-token",
+        1717000000000,
+        "home anthill",
+        "Device is offline",
+        &old_devices,
+    )
+    .await;
+    insert_notification_for_api_token(
+        &notifications_con,
+        &new_profile_token,
+        "test-notification-new-token",
+        1717000000001,
+        "home anthill",
+        "Device is offline",
+        &new_devices,
+    )
+    .await;
+
+    let body = RotateApiTokenInput {
+        old_api_token: old_profile_token.clone(),
+        new_api_token: new_profile_token.clone(),
+        device_features: vec![],
+    };
+    let req: LocalRequest = client.post("/api-token/rotate").json(&body);
+    let res: LocalResponse = req.dispatch().await;
+
+    assert_eq!(res.status(), Status::Ok);
+    assert_eq!(get_notification_ids_by_api_token(&notifications_con, &old_profile_token).await, Vec::<String>::new());
+    assert_eq!(
+        get_notification_ids_by_api_token(&notifications_con, &new_profile_token).await,
+        vec!["test-notification-old-token".to_owned(), "test-notification-new-token".to_owned()]
+    );
+
+    let old_notification = get_notification_hash(&notifications_con, "test-notification-old-token").await;
+    assert_eq!(old_notification["apiToken"], new_profile_token);
+    assert_eq!(old_notification["apiTokens"], format!(r#"["{new_profile_token}"]"#));
+
+    delete_notifications_by_api_token(&notifications_con, &old_profile_token).await;
+    delete_notifications_by_api_token(&notifications_con, &new_profile_token).await;
 }
 
 #[rocket::async_test]

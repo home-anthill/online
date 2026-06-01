@@ -1,12 +1,18 @@
 # Changelog
 
-## 3.0.1
+## 4.0.0
 
 ### Features
 
 - Added repository-specific `AGENTS.md` guidance for coding agents, covering the service
   architecture, Redis-backed integration test setup, security conventions, configuration, and
   CI/CD workflow.
+
+### Bug fixes
+
+- Migrated notification history during `POST /api-token/rotate` by merging the old
+  `notifications:by_api_token:<oldToken>` index into the new token index, updating referenced
+  notification hashes, and deleting the old index.
 
 ### Tests
 
@@ -21,6 +27,9 @@
   when the Redis record is already missing.
 - Added a Redis test helper for inserting partial online hashes so corrupt-record scenarios can be
   covered directly.
+- Added integration coverage for preserving notification history when a profile API token is
+  regenerated.
+
 
 ## 3.0.0
 

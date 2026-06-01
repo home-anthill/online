@@ -4,8 +4,9 @@ use rocket_db_pools::Connection;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::db::RedisPool;
+use crate::db::notification::rotate_notification_api_token;
 use crate::db::online::{rotate_api_token, update_fcm_token_by_api_token};
+use crate::db::{NotificationsRedisPool, RedisPool};
 use crate::errors::api_error::ApiResponse;
 use crate::models::inputs::{InitFCMTTokenInput, RotateApiTokenInput};
 
@@ -38,7 +39,11 @@ pub async fn post_init_fcmtoken(mut db: Connection<RedisPool>, input: Json<InitF
 
 /// rotate apiToken references stored in Redis online state
 #[rocket::post("/api-token/rotate", format = "json", data = "<input>")]
-pub async fn post_rotate_api_token(mut db: Connection<RedisPool>, input: Json<RotateApiTokenInput>) -> ApiResponse {
+pub async fn post_rotate_api_token(
+    mut db: Connection<RedisPool>,
+    mut notifications_db: Connection<NotificationsRedisPool>,
+    input: Json<RotateApiTokenInput>,
+) -> ApiResponse {
     info!(target: "app", "REST - POST - post_rotate_api_token");
 
     let old_api_token = match Uuid::parse_str(&input.old_api_token) {
@@ -65,6 +70,10 @@ pub async fn post_rotate_api_token(mut db: Connection<RedisPool>, input: Json<Ro
 
     if let Err(e) = rotate_api_token(&mut db, &old_api_token, &new_api_token, &device_features).await {
         error!(target: "app", "REST - POST - post_rotate_api_token - update failed: {}", e);
+        return error_response(Status::InternalServerError, "Database error");
+    }
+    if let Err(e) = rotate_notification_api_token(&mut notifications_db, &old_api_token, &new_api_token).await {
+        error!(target: "app", "REST - POST - post_rotate_api_token - notification history migration failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
 

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
-use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, aio::MultiplexedConnection};
+use rocket_db_pools::deadpool_redis::redis::{AsyncCommands, aio::MultiplexedConnection, cmd};
 use tracing::error;
 
 use crate::errors::db_error::DbError;
@@ -12,6 +12,105 @@ pub fn notification_key(id: &str) -> String {
 
 pub fn notifications_by_api_token_key(api_token: &str) -> String {
     format!("notifications:by_api_token:{api_token}")
+}
+
+pub async fn rotate_notification_api_token(
+    db: &mut MultiplexedConnection,
+    old_api_token: &str,
+    new_api_token: &str,
+) -> Result<(), DbError> {
+    if old_api_token == new_api_token {
+        return Ok(());
+    }
+
+    let old_index_key = notifications_by_api_token_key(old_api_token);
+    let new_index_key = notifications_by_api_token_key(new_api_token);
+    let ids: Vec<String> = db.zrange(&old_index_key, 0, -1).await.map_err(|e| {
+        error!(target: "app", "rotate_notification_api_token - Failed to read old notification index: {}", e);
+        DbError::DbScanError
+    })?;
+
+    for id in &ids {
+        let key = notification_key(id);
+        rotate_notification_hash_api_token(db, &key, old_api_token, new_api_token).await?;
+    }
+
+    let _: u64 = cmd("ZUNIONSTORE")
+        .arg(&new_index_key)
+        .arg(2)
+        .arg(&new_index_key)
+        .arg(&old_index_key)
+        .arg("AGGREGATE")
+        .arg("MAX")
+        .query_async(db)
+        .await
+        .map_err(|e| {
+            error!(target: "app", "rotate_notification_api_token - Failed to merge notification indexes: {}", e);
+            DbError::DbScanError
+        })?;
+
+    db.del::<_, ()>(&old_index_key).await.map_err(|e| {
+        error!(target: "app", "rotate_notification_api_token - Failed to delete old notification index: {}", e);
+        DbError::DbScanError
+    })?;
+
+    Ok(())
+}
+
+async fn rotate_notification_hash_api_token(
+    db: &mut MultiplexedConnection,
+    key: &str,
+    old_api_token: &str,
+    new_api_token: &str,
+) -> Result<(), DbError> {
+    let api_token: Option<String> = db.hget(key, "apiToken").await.map_err(|e| {
+        error!(target: "app", "rotate_notification_hash_api_token - Failed to read apiToken for {}: {}", key, e);
+        DbError::DbScanError
+    })?;
+    if api_token.as_deref() == Some(old_api_token) {
+        db.hset::<_, _, _, ()>(key, "apiToken", new_api_token).await.map_err(|e| {
+            error!(target: "app", "rotate_notification_hash_api_token - Failed to update apiToken for {}: {}", key, e);
+            DbError::DbScanError
+        })?;
+    }
+
+    let api_tokens: Option<String> = db.hget(key, "apiTokens").await.map_err(|e| {
+        error!(target: "app", "rotate_notification_hash_api_token - Failed to read apiTokens for {}: {}", key, e);
+        DbError::DbScanError
+    })?;
+    let Some(api_tokens) = api_tokens else {
+        return Ok(());
+    };
+
+    let mut updated = false;
+    let mut tokens = match serde_json::from_str::<Vec<String>>(&api_tokens) {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            error!(target: "app", "rotate_notification_hash_api_token - Invalid apiTokens JSON for {}: {}", key, e);
+            return Ok(());
+        }
+    };
+    for token in &mut tokens {
+        if token == old_api_token {
+            *token = new_api_token.to_string();
+            updated = true;
+        }
+    }
+    if !updated {
+        return Ok(());
+    }
+
+    let tokens = tokens.into_iter().collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+    let tokens_json = serde_json::to_string(&tokens).map_err(|e| {
+        error!(target: "app", "rotate_notification_hash_api_token - Failed to serialize apiTokens for {}: {}", key, e);
+        DbError::DbScanError
+    })?;
+    db.hset::<_, _, _, ()>(key, "apiTokens", tokens_json).await.map_err(|e| {
+        error!(target: "app", "rotate_notification_hash_api_token - Failed to update apiTokens for {}: {}", key, e);
+        DbError::DbScanError
+    })?;
+
+    Ok(())
 }
 
 pub async fn list_profile_notifications(
