@@ -38,3 +38,9 @@ impl fmt::Debug for RotateApiTokenInput {
             .finish()
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateFeatureNotificationInput {
+    pub notification_silenced: bool,
+}

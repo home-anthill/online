@@ -32,6 +32,11 @@ pub async fn get_api_token_by_uuid(db: &MultiplexedConnection, db_key: &str) -> 
     conn.hget(db_key, "apiToken").await.unwrap()
 }
 
+pub async fn get_notification_silenced_by_uuid(db: &MultiplexedConnection, db_key: &str) -> Option<String> {
+    let mut conn = (*db).clone();
+    conn.hget(db_key, "notificationSilenced").await.unwrap()
+}
+
 pub async fn get_cached_fcmtoken_by_api_token(db: &MultiplexedConnection, api_token: &str) -> Option<String> {
     let mut conn = (*db).clone();
     conn.hget(FCM_BY_API_TOKEN_KEY, api_token).await.unwrap()

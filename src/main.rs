@@ -69,6 +69,7 @@ fn rocket() -> Rocket<Build> {
                 routes::online::delete_online,
                 routes::api::post_init_fcmtoken,
                 routes::api::post_rotate_api_token,
+                routes::api::put_feature_notification,
                 routes::keepalive::keep_alive,
                 routes::notification::get_profile_notifications
             ],

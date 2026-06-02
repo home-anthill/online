@@ -11,9 +11,11 @@ use uuid::Uuid;
 use crate::tests_integration::db_utils::{
     delete_cached_fcmtoken_by_api_token, delete_notifications_by_api_token, drop_all_test_keys, get_api_token_by_uuid,
     get_cached_fcmtoken_by_api_token, get_fcmtoken_by_uuid, get_notification_hash, get_notification_ids_by_api_token,
-    insert_notification_for_api_token, insert_online, set_fcmtoken_for_online,
+    get_notification_silenced_by_uuid, insert_notification_for_api_token, insert_online, set_fcmtoken_for_online,
 };
-use online::models::inputs::{InitFCMTTokenInput, RotateApiTokenDeviceFeature, RotateApiTokenInput};
+use online::models::inputs::{
+    InitFCMTTokenInput, RotateApiTokenDeviceFeature, RotateApiTokenInput, UpdateFeatureNotificationInput,
+};
 
 #[rocket::async_test]
 #[test_log::test]
@@ -127,6 +129,40 @@ async fn post_rotate_api_token_updates_stale_online_hash_and_fcm_lookup() {
 
     drop_all_test_keys(&con).await;
     delete_cached_fcmtoken_by_api_token(&con, &new_profile_token).await;
+}
+
+#[rocket::async_test]
+#[test_log::test]
+async fn put_feature_notification_updates_silence_flag() {
+    let client: Client = Client::tracked(rocket()).await.unwrap();
+    let cfg: Config = Config::from_url("redis://localhost:6379");
+    let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let connection: Connection = pool.get().await.unwrap();
+    let con: MultiplexedConnection = connection.clone();
+
+    drop_all_test_keys(&con).await;
+
+    let device_uuid = Uuid::new_v4().to_string();
+    let feature_uuid = Uuid::new_v4().to_string();
+    let db_key = "test_".to_owned() + &device_uuid + "_feature_" + &feature_uuid;
+
+    let body = UpdateFeatureNotificationInput { notification_silenced: true };
+    let req: LocalRequest =
+        client.put(format!("/online/{device_uuid}/features/{feature_uuid}/notifications")).json(&body);
+    let res: LocalResponse = req.dispatch().await;
+
+    assert_eq!(res.status(), Status::Ok);
+    assert_eq!(get_notification_silenced_by_uuid(&con, &db_key).await.as_deref(), Some("true"));
+
+    let body = UpdateFeatureNotificationInput { notification_silenced: false };
+    let req: LocalRequest =
+        client.put(format!("/online/{device_uuid}/features/{feature_uuid}/notifications")).json(&body);
+    let res: LocalResponse = req.dispatch().await;
+
+    assert_eq!(res.status(), Status::Ok);
+    assert_eq!(get_notification_silenced_by_uuid(&con, &db_key).await.as_deref(), Some("false"));
+
+    drop_all_test_keys(&con).await;
 }
 
 #[rocket::async_test]

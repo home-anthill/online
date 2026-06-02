@@ -7,6 +7,12 @@
 - Added repository-specific `AGENTS.md` guidance for coding agents, covering the service
   architecture, Redis-backed integration test setup, security conventions, configuration, and
   CI/CD workflow.
+- Added `GET /notifications/{apiToken}` to list profile notification history from the
+  notifications Redis store, returning newest notifications first.
+- Added a dedicated `notifications_redis_pool` and `NOTIFICATIONS_REDIS_URI` configuration for
+  reading notification history independently from online-state Redis data.
+- Added `PUT /online/{device_uuid}/features/{feature_uuid}/notifications` to store the
+  `notificationSilenced` Redis flag used by `online-alarm`.
 
 ### Bug fixes
 
@@ -29,6 +35,7 @@
   covered directly.
 - Added integration coverage for preserving notification history when a profile API token is
   regenerated.
+- Added integration coverage for updating the per-feature notification silence flag.
 
 
 ## 3.0.0

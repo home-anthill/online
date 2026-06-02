@@ -5,10 +5,10 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::db::notification::rotate_notification_api_token;
-use crate::db::online::{rotate_api_token, update_fcm_token_by_api_token};
+use crate::db::online::{rotate_api_token, update_fcm_token_by_api_token, update_notification_silenced};
 use crate::db::{NotificationsRedisPool, RedisPool};
 use crate::errors::api_error::ApiResponse;
-use crate::models::inputs::{InitFCMTTokenInput, RotateApiTokenInput};
+use crate::models::inputs::{InitFCMTTokenInput, RotateApiTokenInput, UpdateFeatureNotificationInput};
 
 const MAX_FCM_TOKEN_LEN: usize = 512;
 
@@ -31,6 +31,31 @@ pub async fn post_init_fcmtoken(mut db: Connection<RedisPool>, input: Json<InitF
 
     if let Err(e) = update_fcm_token_by_api_token(&mut db, &api_token, &input.fcm_token).await {
         error!(target: "app", "REST - POST - post_init_fcmtoken - update failed: {}", e);
+        return error_response(Status::InternalServerError, "Database error");
+    }
+
+    ApiResponse { json: json!({}), code: Status::Ok.code }
+}
+
+/// update per-feature notification silence preference
+#[rocket::put("/online/<device_uuid>/features/<feature_uuid>/notifications", format = "json", data = "<input>")]
+pub async fn put_feature_notification(
+    mut db: Connection<RedisPool>,
+    device_uuid: Uuid,
+    feature_uuid: Uuid,
+    input: Json<UpdateFeatureNotificationInput>,
+) -> ApiResponse {
+    info!(target: "app", "REST - PUT - put_feature_notification");
+
+    if let Err(e) = update_notification_silenced(
+        &mut db,
+        &device_uuid.to_string(),
+        &feature_uuid.to_string(),
+        input.notification_silenced,
+    )
+    .await
+    {
+        error!(target: "app", "REST - PUT - put_feature_notification - update failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
 
