@@ -88,7 +88,7 @@ async fn post_fcmtoken_rejects_invalid_fcm_token() {
 
 #[rocket::async_test]
 #[test_log::test]
-async fn post_rotate_api_token_updates_stale_online_hash_and_fcm_lookup() {
+async fn put_api_token_updates_stale_online_hash_and_fcm_lookup() {
     let client: Client = Client::tracked(rocket()).await.unwrap();
     let cfg: Config = Config::from_url("redis://localhost:6379");
     let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
@@ -119,7 +119,7 @@ async fn post_rotate_api_token_updates_stale_online_hash_and_fcm_lookup() {
             feature_uuid: feature_uuid.clone(),
         }],
     };
-    let req: LocalRequest = client.post("/api-token/rotate").json(&body);
+    let req: LocalRequest = client.put("/api-token").json(&body);
     let res: LocalResponse = req.dispatch().await;
 
     assert_eq!(res.status(), Status::Ok);
@@ -167,7 +167,7 @@ async fn put_feature_notification_updates_silence_flag() {
 
 #[rocket::async_test]
 #[test_log::test]
-async fn post_rotate_api_token_migrates_notification_history_to_new_api_token() {
+async fn put_api_token_migrates_notification_history_to_new_api_token() {
     let client: Client = Client::tracked(rocket()).await.unwrap();
     let cfg: Config = Config::from_url("redis://localhost:6379/1");
     let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
@@ -219,7 +219,7 @@ async fn post_rotate_api_token_migrates_notification_history_to_new_api_token() 
         new_api_token: new_profile_token.clone(),
         device_features: vec![],
     };
-    let req: LocalRequest = client.post("/api-token/rotate").json(&body);
+    let req: LocalRequest = client.put("/api-token").json(&body);
     let res: LocalResponse = req.dispatch().await;
 
     assert_eq!(res.status(), Status::Ok);
@@ -239,7 +239,7 @@ async fn post_rotate_api_token_migrates_notification_history_to_new_api_token() 
 
 #[rocket::async_test]
 #[test_log::test]
-async fn post_rotate_api_token_rejects_invalid_uuids() {
+async fn put_api_token_rejects_invalid_uuids() {
     let client: Client = Client::tracked(rocket()).await.unwrap();
     let valid_uuid = Uuid::new_v4().to_string();
 
@@ -285,7 +285,7 @@ async fn post_rotate_api_token_rejects_invalid_uuids() {
     ];
 
     for (body, message) in cases {
-        let req: LocalRequest = client.post("/api-token/rotate").json(&body);
+        let req: LocalRequest = client.put("/api-token").json(&body);
         let res: LocalResponse = req.dispatch().await;
 
         assert_eq!(res.status(), Status::BadRequest);

@@ -16,7 +16,7 @@
 
 ### Bug fixes
 
-- Migrated notification history during `POST /api-token/rotate` by merging the old
+- Migrated notification history during `PUT /api-token` by merging the old
   `notifications:by_api_token:<oldToken>` index into the new token index, updating referenced
   notification hashes, and deleting the old index.
 
@@ -24,7 +24,7 @@
 
 - Added `POST /fcmtoken` integration tests for invalid `apiToken` and empty `fcmToken` request
   bodies, asserting the expected `400` JSON errors.
-- Added `POST /api-token/rotate` integration tests for invalid `oldApiToken`, `newApiToken`,
+- Added `PUT /api-token` integration tests for invalid `oldApiToken`, `newApiToken`,
   `deviceUuid`, and `featureUuid` values.
 - Added `GET /online/{device_uuid}/features/{feature_uuid}` integration tests for missing Redis
   records and corrupt records with missing `apiToken` or invalid `createdAt`, asserting secure
@@ -42,7 +42,7 @@
 
 ### Features
 
-- Added internal `POST /api-token/rotate` support to move Redis online-state `apiToken` fields and
+- Added internal `PUT /api-token` support to move Redis online-state `apiToken` fields and
   the `fcm_by_api_token` lookup to a regenerated token, validating both tokens and the supplied
   device/feature UUIDs.
 - Ensured online Redis hashes always contain `modifiedAt`; creation writes matching `createdAt`
