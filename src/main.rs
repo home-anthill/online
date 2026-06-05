@@ -11,26 +11,6 @@ use online::config::{init, redact_redis_uri};
 use online::db::{NotificationsRedisPool, RedisPool};
 use online::routes;
 
-fn redis_url_with_optional_credentials(redis_uri: &str, redis_username: &str, redis_password: &str) -> String {
-    if redis_password.is_empty() {
-        redis_uri.to_string()
-    } else {
-        match redis_uri.find("://") {
-            Some(scheme_end) => format!(
-                "{scheme}{username}:{password}@{rest}",
-                scheme = &redis_uri[..scheme_end + 3],
-                username = encode(redis_username),
-                password = encode(redis_password),
-                rest = &redis_uri[scheme_end + 3..],
-            ),
-            None => {
-                warn!(target: "app", "Redis URI has no recognizable scheme (missing '://'), skipping credential injection");
-                redis_uri.to_string()
-            }
-        }
-    }
-}
-
 #[rocket::launch]
 fn rocket() -> Rocket<Build> {
     // 1. Init logger and env
@@ -68,7 +48,7 @@ fn rocket() -> Rocket<Build> {
                 routes::online::get_online,
                 routes::online::delete_online,
                 routes::api::post_init_fcmtoken,
-                routes::api::post_rotate_api_token,
+                routes::api::put_api_token,
                 routes::api::put_feature_notification,
                 routes::keepalive::keep_alive,
                 routes::notification::get_profile_notifications
@@ -83,6 +63,26 @@ fn rocket() -> Rocket<Build> {
                 catchers::service_unavailable,
             ],
         )
+}
+
+fn redis_url_with_optional_credentials(redis_uri: &str, redis_username: &str, redis_password: &str) -> String {
+    if redis_password.is_empty() {
+        redis_uri.to_string()
+    } else {
+        match redis_uri.find("://") {
+            Some(scheme_end) => format!(
+                "{scheme}{username}:{password}@{rest}",
+                scheme = &redis_uri[..scheme_end + 3],
+                username = encode(redis_username),
+                password = encode(redis_password),
+                rest = &redis_uri[scheme_end + 3..],
+            ),
+            None => {
+                warn!(target: "app", "Redis URI has no recognizable scheme (missing '://'), skipping credential injection");
+                redis_uri.to_string()
+            }
+        }
+    }
 }
 
 // testing

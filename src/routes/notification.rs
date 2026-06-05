@@ -5,7 +5,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::db::NotificationsRedisPool;
-use crate::db::notification::list_profile_notifications;
+use crate::db::notification::get_notifications_by_api_token;
 use crate::errors::api_error::ApiResponse;
 
 fn error_response(status: Status, message: &str) -> ApiResponse {
@@ -22,7 +22,7 @@ pub async fn get_profile_notifications(mut db: Connection<NotificationsRedisPool
         Err(_) => return error_response(Status::BadRequest, "Invalid apiToken"),
     };
 
-    let notifications = match list_profile_notifications(&mut db, &api_token).await {
+    let notifications = match get_notifications_by_api_token(&mut db, &api_token).await {
         Ok(val) => val,
         Err(e) => {
             error!(target: "app", "REST - GET - get_profile_notifications - read failed: {}", e);

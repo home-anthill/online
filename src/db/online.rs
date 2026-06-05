@@ -132,7 +132,7 @@ pub async fn update_fcm_token_by_api_token(
     Ok(())
 }
 
-pub async fn rotate_api_token(
+pub async fn update_online_api_token(
     db: &mut MultiplexedConnection,
     old_api_token: &str,
     new_api_token: &str,
@@ -141,17 +141,17 @@ pub async fn rotate_api_token(
     let fcm_token: Option<String> = match db.hget(FCM_BY_API_TOKEN_KEY, old_api_token).await {
         Ok(val) => val,
         Err(e) => {
-            error!(target: "app", "rotate_api_token - Failed to get fcmToken by old apiToken: {}", e);
+            error!(target: "app", "update_online_api_token - Failed to get fcmToken by old apiToken: {}", e);
             return Err(DbError::DbScanError);
         }
     };
     if let Some(fcm_token) = fcm_token {
         if let Err(e) = db.hset::<_, _, _, ()>(FCM_BY_API_TOKEN_KEY, new_api_token, fcm_token).await {
-            error!(target: "app", "rotate_api_token - Failed to cache fcmToken by new apiToken: {}", e);
+            error!(target: "app", "update_online_api_token - Failed to cache fcmToken by new apiToken: {}", e);
             return Err(DbError::DbScanError);
         }
         if let Err(e) = db.hdel::<_, _, ()>(FCM_BY_API_TOKEN_KEY, old_api_token).await {
-            error!(target: "app", "rotate_api_token - Failed to delete old fcmToken apiToken lookup: {}", e);
+            error!(target: "app", "update_online_api_token - Failed to delete old fcmToken apiToken lookup: {}", e);
             return Err(DbError::DbScanError);
         }
     }
@@ -162,7 +162,7 @@ pub async fn rotate_api_token(
             let exists: bool = match db.exists(&db_key).await {
                 Ok(val) => val,
                 Err(e) => {
-                    error!(target: "app", "rotate_api_token - Failed to check key {}: {}", db_key, e);
+                    error!(target: "app", "update_online_api_token - Failed to check key {}: {}", db_key, e);
                     return Err(DbError::DbScanError);
                 }
             };
@@ -173,14 +173,14 @@ pub async fn rotate_api_token(
             let stored_token: Option<String> = match db.hget(&db_key, "apiToken").await {
                 Ok(val) => val,
                 Err(e) => {
-                    error!(target: "app", "rotate_api_token - Failed to get apiToken for key {}: {}", db_key, e);
+                    error!(target: "app", "update_online_api_token - Failed to get apiToken for key {}: {}", db_key, e);
                     return Err(DbError::DbScanError);
                 }
             };
             let stored_fcm_token: Option<String> = match db.hget(&db_key, "fcmToken").await {
                 Ok(val) => val,
                 Err(e) => {
-                    error!(target: "app", "rotate_api_token - Failed to get fcmToken for key {}: {}", db_key, e);
+                    error!(target: "app", "update_online_api_token - Failed to get fcmToken for key {}: {}", db_key, e);
                     return Err(DbError::DbScanError);
                 }
             };
@@ -189,18 +189,18 @@ pub async fn rotate_api_token(
                 && !stored_fcm_token.is_empty()
                 && let Err(e) = db.hset::<_, _, _, ()>(FCM_BY_API_TOKEN_KEY, new_api_token, stored_fcm_token).await
             {
-                error!(target: "app", "rotate_api_token - Failed to cache fcmToken by new apiToken: {}", e);
+                error!(target: "app", "update_online_api_token - Failed to cache fcmToken by new apiToken: {}", e);
                 return Err(DbError::DbScanError);
             }
             if let Some(stored_token) = stored_token.as_deref()
                 && stored_token != new_api_token
                 && let Err(e) = db.hdel::<_, _, ()>(FCM_BY_API_TOKEN_KEY, stored_token).await
             {
-                error!(target: "app", "rotate_api_token - Failed to delete stale fcmToken apiToken lookup: {}", e);
+                error!(target: "app", "update_online_api_token - Failed to delete stale fcmToken apiToken lookup: {}", e);
                 return Err(DbError::DbScanError);
             }
             if let Err(e) = db.hset::<_, _, _, ()>(&db_key, "apiToken", new_api_token).await {
-                error!(target: "app", "rotate_api_token - Failed to update apiToken for key {}: {}", db_key, e);
+                error!(target: "app", "update_online_api_token - Failed to update apiToken for key {}: {}", db_key, e);
                 return Err(DbError::DbScanError);
             }
         }
@@ -210,7 +210,7 @@ pub async fn rotate_api_token(
     let db_keys: Vec<String> = match db.scan_match::<&str, String>(get_all_keys_pattern()).await {
         Ok(stream) => stream.collect().await,
         Err(e) => {
-            error!(target: "app", "rotate_api_token - Failed to scan Redis: {}", e);
+            error!(target: "app", "update_online_api_token - Failed to scan Redis: {}", e);
             return Err(DbError::DbScanError);
         }
     };
@@ -219,14 +219,14 @@ pub async fn rotate_api_token(
         let stored_token: Option<String> = match db.hget(&db_key, "apiToken").await {
             Ok(val) => val,
             Err(e) => {
-                error!(target: "app", "rotate_api_token - Failed to get apiToken for key {}: {}", db_key, e);
+                error!(target: "app", "update_online_api_token - Failed to get apiToken for key {}: {}", db_key, e);
                 continue;
             }
         };
         let tokens_match: bool =
             stored_token.as_deref().map(|t| t.as_bytes().ct_eq(old_api_token.as_bytes()).into()).unwrap_or(false);
         if tokens_match && let Err(e) = db.hset::<_, _, _, ()>(&db_key, "apiToken", new_api_token).await {
-            error!(target: "app", "rotate_api_token - Failed to update apiToken for key {}: {}", db_key, e);
+            error!(target: "app", "update_online_api_token - Failed to update apiToken for key {}: {}", db_key, e);
             return Err(DbError::DbScanError);
         }
     }

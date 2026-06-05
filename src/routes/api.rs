@@ -4,8 +4,8 @@ use rocket_db_pools::Connection;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::db::notification::rotate_notification_api_token;
-use crate::db::online::{rotate_api_token, update_fcm_token_by_api_token, update_notification_silenced};
+use crate::db::notification::update_notification_api_token;
+use crate::db::online::{update_fcm_token_by_api_token, update_notification_silenced, update_online_api_token};
 use crate::db::{NotificationsRedisPool, RedisPool};
 use crate::errors::api_error::ApiResponse;
 use crate::models::inputs::{InitFCMTTokenInput, RotateApiTokenInput, UpdateFeatureNotificationInput};
@@ -62,14 +62,14 @@ pub async fn put_feature_notification(
     ApiResponse { json: json!({}), code: Status::Ok.code }
 }
 
-/// rotate apiToken references stored in Redis online state
-#[rocket::post("/api-token/rotate", format = "json", data = "<input>")]
-pub async fn post_rotate_api_token(
+/// update apiToken references stored in Redis online state
+#[rocket::put("/api-token", format = "json", data = "<input>")]
+pub async fn put_api_token(
     mut db: Connection<RedisPool>,
     mut notifications_db: Connection<NotificationsRedisPool>,
     input: Json<RotateApiTokenInput>,
 ) -> ApiResponse {
-    info!(target: "app", "REST - POST - post_rotate_api_token");
+    info!(target: "app", "REST - PUT - put_api_token");
 
     let old_api_token = match Uuid::parse_str(&input.old_api_token) {
         Ok(val) => val.to_string(),
@@ -93,12 +93,12 @@ pub async fn post_rotate_api_token(
         device_features.push((device_uuid, feature_uuid));
     }
 
-    if let Err(e) = rotate_api_token(&mut db, &old_api_token, &new_api_token, &device_features).await {
-        error!(target: "app", "REST - POST - post_rotate_api_token - update failed: {}", e);
+    if let Err(e) = update_online_api_token(&mut db, &old_api_token, &new_api_token, &device_features).await {
+        error!(target: "app", "REST - PUT - put_api_token - update failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
-    if let Err(e) = rotate_notification_api_token(&mut notifications_db, &old_api_token, &new_api_token).await {
-        error!(target: "app", "REST - POST - post_rotate_api_token - notification history migration failed: {}", e);
+    if let Err(e) = update_notification_api_token(&mut notifications_db, &old_api_token, &new_api_token).await {
+        error!(target: "app", "REST - PUT - put_api_token - notification history migration failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
 
