@@ -14,7 +14,7 @@ use crate::tests_integration::db_utils::{
     get_notification_silenced_by_uuid, insert_notification_for_api_token, insert_online, set_fcmtoken_for_online,
 };
 use online::models::inputs::{
-    InitFCMTTokenInput, RotateApiTokenDeviceFeature, RotateApiTokenInput, UpdateFeatureNotificationInput,
+    InitFCMTTokenInput, UpdateApiTokenDeviceFeature, UpdateApiTokenInput, UpdateFeatureNotificationInput,
 };
 
 #[rocket::async_test]
@@ -111,10 +111,10 @@ async fn put_api_token_updates_stale_online_hash_and_fcm_lookup() {
     delete_cached_fcmtoken_by_api_token(&con, &stale_redis_token).await;
     delete_cached_fcmtoken_by_api_token(&con, &new_profile_token).await;
 
-    let body = RotateApiTokenInput {
+    let body = UpdateApiTokenInput {
         old_api_token: old_profile_token,
         new_api_token: new_profile_token.clone(),
-        device_features: vec![RotateApiTokenDeviceFeature {
+        device_features: vec![UpdateApiTokenDeviceFeature {
             device_uuid: device_uuid.clone(),
             feature_uuid: feature_uuid.clone(),
         }],
@@ -214,7 +214,7 @@ async fn put_api_token_migrates_notification_history_to_new_api_token() {
     )
     .await;
 
-    let body = RotateApiTokenInput {
+    let body = UpdateApiTokenInput {
         old_api_token: old_profile_token.clone(),
         new_api_token: new_profile_token.clone(),
         device_features: vec![],
@@ -245,7 +245,7 @@ async fn put_api_token_rejects_invalid_uuids() {
 
     let cases = [
         (
-            RotateApiTokenInput {
+            UpdateApiTokenInput {
                 old_api_token: "not-a-uuid".to_owned(),
                 new_api_token: valid_uuid.clone(),
                 device_features: vec![],
@@ -253,7 +253,7 @@ async fn put_api_token_rejects_invalid_uuids() {
             "Invalid oldApiToken",
         ),
         (
-            RotateApiTokenInput {
+            UpdateApiTokenInput {
                 old_api_token: valid_uuid.clone(),
                 new_api_token: "not-a-uuid".to_owned(),
                 device_features: vec![],
@@ -261,10 +261,10 @@ async fn put_api_token_rejects_invalid_uuids() {
             "Invalid newApiToken",
         ),
         (
-            RotateApiTokenInput {
+            UpdateApiTokenInput {
                 old_api_token: valid_uuid.clone(),
                 new_api_token: valid_uuid.clone(),
-                device_features: vec![RotateApiTokenDeviceFeature {
+                device_features: vec![UpdateApiTokenDeviceFeature {
                     device_uuid: "not-a-uuid".to_owned(),
                     feature_uuid: valid_uuid.clone(),
                 }],
@@ -272,10 +272,10 @@ async fn put_api_token_rejects_invalid_uuids() {
             "Invalid deviceUuid",
         ),
         (
-            RotateApiTokenInput {
+            UpdateApiTokenInput {
                 old_api_token: valid_uuid.clone(),
                 new_api_token: valid_uuid.clone(),
-                device_features: vec![RotateApiTokenDeviceFeature {
+                device_features: vec![UpdateApiTokenDeviceFeature {
                     device_uuid: valid_uuid.clone(),
                     feature_uuid: "not-a-uuid".to_owned(),
                 }],

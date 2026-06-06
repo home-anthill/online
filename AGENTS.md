@@ -59,7 +59,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
   - `GET /notifications/{apiToken}` — list profile notification history from the notifications Redis store, newest first
 - **db/online.rs** — Online Redis operations (HGETALL, HSET, HGET, DEL, EXISTS, SCAN). Key format: `online_{device_uuid}_feature_{feature_uuid}`
 - **db/notification.rs** — Notification Redis operations. Index key format: `notifications:by_api_token:{apiToken}`; notification hash key format: `notification:{id}`
-- **models/** — `Online`, `ProfileNotification`, `InitFCMTTokenInput`, `RotateApiTokenInput`, `RotateApiTokenDeviceFeature`, and `UpdateFeatureNotificationInput`
+- **models/** — `Online`, `ProfileNotification`, `InitFCMTTokenInput`, `UpdateApiTokenInput`, `UpdateApiTokenDeviceFeature`, and `UpdateFeatureNotificationInput`
 - **errors/** — `ApiError`/`ApiResponse` responders, `DbError` (thiserror) enums
 - **catchers/** — HTTP error catchers (400, 404, 500, 503)
 - **config/** — Tracing logger setup with daily-rotating file appenders (disabled when `ENV=testing`)
@@ -71,7 +71,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 
 ### Models
 - Struct fields use `snake_case` (Rust convention). JSON serialisation uses `camelCase` via `#[serde(rename_all = "camelCase")]` on each struct — do not use `#[allow(non_snake_case)]` with camelCase field names.
-- **`Online`, `InitFCMTTokenInput`, and `RotateApiTokenInput` have manual `Debug` impls that print `<redacted>` for sensitive fields (`apiToken`, `fcmToken`, `oldApiToken`, `newApiToken`)** to prevent credential leakage in logs. Always add custom `Debug` impls to any new types that hold credentials.
+- **`Online`, `InitFCMTTokenInput`, and `UpdateApiTokenInput` have manual `Debug` impls that print `<redacted>` for sensitive fields (`apiToken`, `fcmToken`, `oldApiToken`, `newApiToken`)** to prevent credential leakage in logs. Always add custom `Debug` impls to any new types that hold credentials.
 
 ### Route handlers
 - **Path parameters for device/feature UUIDs are typed as `uuid::Uuid`** — Rocket automatically rejects non-UUID segments before the handler runs, preventing invalid data from reaching Redis.

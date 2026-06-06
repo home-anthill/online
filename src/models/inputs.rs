@@ -17,22 +17,22 @@ impl fmt::Debug for InitFCMTTokenInput {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct RotateApiTokenDeviceFeature {
+pub struct UpdateApiTokenDeviceFeature {
     pub device_uuid: String,
     pub feature_uuid: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct RotateApiTokenInput {
+pub struct UpdateApiTokenInput {
     pub old_api_token: String,
     pub new_api_token: String,
-    pub device_features: Vec<RotateApiTokenDeviceFeature>,
+    pub device_features: Vec<UpdateApiTokenDeviceFeature>,
 }
 
-impl fmt::Debug for RotateApiTokenInput {
+impl fmt::Debug for UpdateApiTokenInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RotateApiTokenInput")
+        f.debug_struct("UpdateApiTokenInput")
             .field("oldApiToken", &"<redacted>")
             .field("newApiToken", &"<redacted>")
             .finish()

@@ -8,7 +8,7 @@ use crate::db::notification::update_notification_api_token;
 use crate::db::online::{update_fcm_token_by_api_token, update_notification_silenced, update_online_api_token};
 use crate::db::{NotificationsRedisPool, RedisPool};
 use crate::errors::api_error::ApiResponse;
-use crate::models::inputs::{InitFCMTTokenInput, RotateApiTokenInput, UpdateFeatureNotificationInput};
+use crate::models::inputs::{InitFCMTTokenInput, UpdateApiTokenInput, UpdateFeatureNotificationInput};
 
 const MAX_FCM_TOKEN_LEN: usize = 512;
 
@@ -67,7 +67,7 @@ pub async fn put_feature_notification(
 pub async fn put_api_token(
     mut db: Connection<RedisPool>,
     mut notifications_db: Connection<NotificationsRedisPool>,
-    input: Json<RotateApiTokenInput>,
+    input: Json<UpdateApiTokenInput>,
 ) -> ApiResponse {
     info!(target: "app", "REST - PUT - put_api_token");
 
