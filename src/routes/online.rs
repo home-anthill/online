@@ -8,7 +8,7 @@ use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use crate::db::RedisPool;
+use crate::db::OnlineRedisPool;
 use crate::db::online::{from_uuid_to_db_key, get_date_field_by_name};
 use crate::errors::api_error::ApiResponse;
 
@@ -18,7 +18,7 @@ fn error_response(status: Status, message: &str) -> ApiResponse {
 
 /// get online value by UUID
 #[rocket::get("/online/<device_uuid>/features/<feature_uuid>")]
-pub async fn get_online(mut db: Connection<RedisPool>, device_uuid: Uuid, feature_uuid: Uuid) -> ApiResponse {
+pub async fn get_online(mut db: Connection<OnlineRedisPool>, device_uuid: Uuid, feature_uuid: Uuid) -> ApiResponse {
     info!(target: "app", "REST - GET - get_online called");
 
     let db_key = from_uuid_to_db_key(&device_uuid.to_string(), &feature_uuid.to_string());
@@ -80,7 +80,7 @@ pub async fn get_online(mut db: Connection<RedisPool>, device_uuid: Uuid, featur
 
 /// delete online to prevent infinite notifications
 #[rocket::delete("/online/<device_uuid>/features/<feature_uuid>")]
-pub async fn delete_online(mut db: Connection<RedisPool>, device_uuid: Uuid, feature_uuid: Uuid) -> ApiResponse {
+pub async fn delete_online(mut db: Connection<OnlineRedisPool>, device_uuid: Uuid, feature_uuid: Uuid) -> ApiResponse {
     info!(target: "app", "REST - DELETE - delete_online called");
 
     let db_key = from_uuid_to_db_key(&device_uuid.to_string(), &feature_uuid.to_string());

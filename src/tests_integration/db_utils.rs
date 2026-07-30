@@ -14,6 +14,18 @@ pub async fn drop_all_test_keys(db: &MultiplexedConnection) {
     }
 }
 
+pub async fn drop_all_test_alarm_keys(db: &MultiplexedConnection) {
+    let mut conn = (*db).clone();
+    for pattern in ["test-alarm:*", "test-alarm-settings:*"] {
+        let values = conn.scan_match::<&str, String>(pattern).await.unwrap();
+        let keys: Vec<String> = values.collect().await;
+        for key in &keys {
+            conn.del::<&str, u128>(key).await.unwrap();
+        }
+    }
+    conn.del::<_, u128>("test-alarms:pending").await.unwrap();
+}
+
 pub async fn get_fcmtoken_by_uuid(db: &MultiplexedConnection, db_key: &str) -> String {
     let mut conn = (*db).clone();
     let is_exists: Value = conn.exists(db_key).await.unwrap();
@@ -32,9 +44,13 @@ pub async fn get_api_token_by_uuid(db: &MultiplexedConnection, db_key: &str) -> 
     conn.hget(db_key, "apiToken").await.unwrap()
 }
 
-pub async fn get_notification_silenced_by_uuid(db: &MultiplexedConnection, db_key: &str) -> Option<String> {
+pub async fn get_alarm_notification_silenced(
+    db: &MultiplexedConnection,
+    device_uuid: &str,
+    feature_uuid: &str,
+) -> Option<String> {
     let mut conn = (*db).clone();
-    conn.hget(db_key, "notificationSilenced").await.unwrap()
+    conn.hget(format!("test-alarm-settings:{device_uuid}:{feature_uuid}"), "notificationSilenced").await.unwrap()
 }
 
 pub async fn get_cached_fcmtoken_by_api_token(db: &MultiplexedConnection, api_token: &str) -> Option<String> {

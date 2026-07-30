@@ -64,9 +64,9 @@ COPY --from=system-deps --chown=65534:65534 /app /app
 WORKDIR /app
 
 # Binary and env template.
-COPY --from=builder --chown=65534:65534 /app/target/release/online /app/online
+COPY --from=builder --chown=65534:65534 /app/target/release/alarm /app/alarm
 COPY --from=builder --chown=65534:65534 /app/Rocket.toml Rocket.toml
 
 USER 65534
 
-ENTRYPOINT ["/app/online"]
+ENTRYPOINT ["/app/alarm"]

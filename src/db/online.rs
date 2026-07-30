@@ -233,22 +233,6 @@ pub async fn update_online_api_token(
     Ok(())
 }
 
-pub async fn update_notification_silenced(
-    db: &mut MultiplexedConnection,
-    device_uuid: &str,
-    feature_uuid: &str,
-    notification_silenced: bool,
-) -> Result<(), DbError> {
-    let db_key = from_uuid_to_db_key(device_uuid, feature_uuid);
-    let value = if notification_silenced { "true" } else { "false" };
-
-    if let Err(e) = db.hset::<_, _, _, ()>(&db_key, "notificationSilenced", value).await {
-        error!(target: "app", "update_notification_silenced - Failed to update key {}: {}", db_key, e);
-        return Err(DbError::DbScanError);
-    }
-    Ok(())
-}
-
 pub fn from_uuid_to_db_key(device_uuid: &str, feature_uuid: &str) -> String {
     let prefix = if is_testing() { "test" } else { "online" };
     format!("{}_{}_feature_{}", prefix, device_uuid, feature_uuid)

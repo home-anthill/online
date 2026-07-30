@@ -4,16 +4,20 @@ use super::rocket;
 use pretty_assertions::assert_eq;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
-use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
+use rocket_db_pools::deadpool_redis::{
+    Config, Connection, Runtime,
+    redis::{AsyncCommands, aio::MultiplexedConnection},
+};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::tests_integration::db_utils::{
-    delete_cached_fcmtoken_by_api_token, delete_notifications_by_api_token, drop_all_test_keys, get_api_token_by_uuid,
-    get_cached_fcmtoken_by_api_token, get_fcmtoken_by_uuid, get_notification_hash, get_notification_ids_by_api_token,
-    get_notification_silenced_by_uuid, insert_notification_for_api_token, insert_online, set_fcmtoken_for_online,
+    delete_cached_fcmtoken_by_api_token, delete_notifications_by_api_token, drop_all_test_alarm_keys,
+    drop_all_test_keys, get_alarm_notification_silenced, get_api_token_by_uuid, get_cached_fcmtoken_by_api_token,
+    get_fcmtoken_by_uuid, get_notification_hash, get_notification_ids_by_api_token, insert_notification_for_api_token,
+    insert_online, set_fcmtoken_for_online,
 };
-use online::models::inputs::{
+use alarm::models::inputs::{
     InitFCMTTokenInput, UpdateApiTokenDeviceFeature, UpdateApiTokenInput, UpdateFeatureNotificationInput,
 };
 
@@ -135,34 +139,32 @@ async fn put_api_token_updates_stale_online_hash_and_fcm_lookup() {
 #[test_log::test]
 async fn put_feature_notification_updates_silence_flag() {
     let client: Client = Client::tracked(rocket()).await.unwrap();
-    let cfg: Config = Config::from_url("redis://localhost:6379");
+    let cfg: Config = Config::from_url("redis://localhost:6379/3");
     let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
     let connection: Connection = pool.get().await.unwrap();
     let con: MultiplexedConnection = connection.clone();
 
-    drop_all_test_keys(&con).await;
+    drop_all_test_alarm_keys(&con).await;
 
     let device_uuid = Uuid::new_v4().to_string();
     let feature_uuid = Uuid::new_v4().to_string();
-    let db_key = "test_".to_owned() + &device_uuid + "_feature_" + &feature_uuid;
-
     let body = UpdateFeatureNotificationInput { notification_silenced: true };
     let req: LocalRequest =
-        client.put(format!("/online/{device_uuid}/features/{feature_uuid}/notifications")).json(&body);
+        client.put(format!("/alarms/{device_uuid}/features/{feature_uuid}/notifications")).json(&body);
     let res: LocalResponse = req.dispatch().await;
 
     assert_eq!(res.status(), Status::Ok);
-    assert_eq!(get_notification_silenced_by_uuid(&con, &db_key).await.as_deref(), Some("true"));
+    assert_eq!(get_alarm_notification_silenced(&con, &device_uuid, &feature_uuid).await.as_deref(), Some("true"));
 
     let body = UpdateFeatureNotificationInput { notification_silenced: false };
     let req: LocalRequest =
-        client.put(format!("/online/{device_uuid}/features/{feature_uuid}/notifications")).json(&body);
+        client.put(format!("/alarms/{device_uuid}/features/{feature_uuid}/notifications")).json(&body);
     let res: LocalResponse = req.dispatch().await;
 
     assert_eq!(res.status(), Status::Ok);
-    assert_eq!(get_notification_silenced_by_uuid(&con, &db_key).await.as_deref(), Some("false"));
+    assert_eq!(get_alarm_notification_silenced(&con, &device_uuid, &feature_uuid).await.as_deref(), Some("false"));
 
-    drop_all_test_keys(&con).await;
+    drop_all_test_alarm_keys(&con).await;
 }
 
 #[rocket::async_test]
@@ -173,11 +175,18 @@ async fn put_api_token_migrates_notification_history_to_new_api_token() {
     let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
     let connection: Connection = pool.get().await.unwrap();
     let notifications_con: MultiplexedConnection = connection.clone();
+    let alarms_cfg: Config = Config::from_url("redis://localhost:6379/3");
+    let alarms_pool = alarms_cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let alarms_connection: Connection = alarms_pool.get().await.unwrap();
+    let mut alarms_con: MultiplexedConnection = alarms_connection.clone();
 
     let old_profile_token = Uuid::new_v4().to_string();
     let new_profile_token = Uuid::new_v4().to_string();
     delete_notifications_by_api_token(&notifications_con, &old_profile_token).await;
     delete_notifications_by_api_token(&notifications_con, &new_profile_token).await;
+    let pending_alarm_key = format!("test-alarm:device:feature:feature:type:motion:nonce:{}", Uuid::new_v4().simple());
+    alarms_con.del::<_, ()>(&pending_alarm_key).await.unwrap();
+    alarms_con.hset::<_, _, _, ()>(&pending_alarm_key, "apiToken", &old_profile_token).await.unwrap();
 
     let old_devices = json!([{
         "deviceUuid": Uuid::new_v4().to_string(),
@@ -232,9 +241,12 @@ async fn put_api_token_migrates_notification_history_to_new_api_token() {
     let old_notification = get_notification_hash(&notifications_con, "test-notification-old-token").await;
     assert_eq!(old_notification["apiToken"], new_profile_token);
     assert_eq!(old_notification["apiTokens"], format!(r#"["{new_profile_token}"]"#));
+    let pending_alarm_token: String = alarms_con.hget(&pending_alarm_key, "apiToken").await.unwrap();
+    assert_eq!(pending_alarm_token, new_profile_token);
 
     delete_notifications_by_api_token(&notifications_con, &old_profile_token).await;
     delete_notifications_by_api_token(&notifications_con, &new_profile_token).await;
+    alarms_con.del::<_, ()>(&pending_alarm_key).await.unwrap();
 }
 
 #[rocket::async_test]

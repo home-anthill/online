@@ -4,9 +4,10 @@ use rocket_db_pools::Connection;
 use tracing::{error, info};
 use uuid::Uuid;
 
+use crate::db::alarm::{update_notification_silenced, update_pending_alarm_api_token};
 use crate::db::notification::update_notification_api_token;
-use crate::db::online::{update_fcm_token_by_api_token, update_notification_silenced, update_online_api_token};
-use crate::db::{NotificationsRedisPool, RedisPool};
+use crate::db::online::{update_fcm_token_by_api_token, update_online_api_token};
+use crate::db::{AlarmsRedisPool, NotificationsRedisPool, OnlineRedisPool};
 use crate::errors::api_error::ApiResponse;
 use crate::models::inputs::{InitFCMTTokenInput, UpdateApiTokenInput, UpdateFeatureNotificationInput};
 
@@ -18,7 +19,10 @@ fn error_response(status: Status, message: &str) -> ApiResponse {
 
 /// init fcm token
 #[rocket::post("/fcmtoken", format = "json", data = "<input>")]
-pub async fn post_init_fcmtoken(mut db: Connection<RedisPool>, input: Json<InitFCMTTokenInput>) -> ApiResponse {
+pub async fn post_init_fcmtoken(
+    mut online_db: Connection<OnlineRedisPool>,
+    input: Json<InitFCMTTokenInput>,
+) -> ApiResponse {
     info!(target: "app", "REST - POST - post_init_fcmtoken");
 
     let api_token = match Uuid::parse_str(&input.api_token) {
@@ -29,7 +33,7 @@ pub async fn post_init_fcmtoken(mut db: Connection<RedisPool>, input: Json<InitF
         return error_response(Status::BadRequest, "Invalid fcmToken");
     }
 
-    if let Err(e) = update_fcm_token_by_api_token(&mut db, &api_token, &input.fcm_token).await {
+    if let Err(e) = update_fcm_token_by_api_token(&mut online_db, &api_token, &input.fcm_token).await {
         error!(target: "app", "REST - POST - post_init_fcmtoken - update failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
@@ -38,9 +42,9 @@ pub async fn post_init_fcmtoken(mut db: Connection<RedisPool>, input: Json<InitF
 }
 
 /// update per-feature notification silence preference
-#[rocket::put("/online/<device_uuid>/features/<feature_uuid>/notifications", format = "json", data = "<input>")]
+#[rocket::put("/alarms/<device_uuid>/features/<feature_uuid>/notifications", format = "json", data = "<input>")]
 pub async fn put_feature_notification(
-    mut db: Connection<RedisPool>,
+    mut alarms_db: Connection<AlarmsRedisPool>,
     device_uuid: Uuid,
     feature_uuid: Uuid,
     input: Json<UpdateFeatureNotificationInput>,
@@ -48,7 +52,7 @@ pub async fn put_feature_notification(
     info!(target: "app", "REST - PUT - put_feature_notification");
 
     if let Err(e) = update_notification_silenced(
-        &mut db,
+        &mut alarms_db,
         &device_uuid.to_string(),
         &feature_uuid.to_string(),
         input.notification_silenced,
@@ -65,8 +69,9 @@ pub async fn put_feature_notification(
 /// update apiToken references stored in Redis online state
 #[rocket::put("/api-token", format = "json", data = "<input>")]
 pub async fn put_api_token(
-    mut db: Connection<RedisPool>,
+    mut online_db: Connection<OnlineRedisPool>,
     mut notifications_db: Connection<NotificationsRedisPool>,
+    mut alarms_db: Connection<AlarmsRedisPool>,
     input: Json<UpdateApiTokenInput>,
 ) -> ApiResponse {
     info!(target: "app", "REST - PUT - put_api_token");
@@ -93,12 +98,16 @@ pub async fn put_api_token(
         device_features.push((device_uuid, feature_uuid));
     }
 
-    if let Err(e) = update_online_api_token(&mut db, &old_api_token, &new_api_token, &device_features).await {
+    if let Err(e) = update_online_api_token(&mut online_db, &old_api_token, &new_api_token, &device_features).await {
         error!(target: "app", "REST - PUT - put_api_token - update failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
     if let Err(e) = update_notification_api_token(&mut notifications_db, &old_api_token, &new_api_token).await {
         error!(target: "app", "REST - PUT - put_api_token - notification history migration failed: {}", e);
+        return error_response(Status::InternalServerError, "Database error");
+    }
+    if let Err(e) = update_pending_alarm_api_token(&mut alarms_db, &old_api_token, &new_api_token).await {
+        error!(target: "app", "REST - PUT - put_api_token - pending alarm migration failed: {}", e);
         return error_response(Status::InternalServerError, "Database error");
     }
 

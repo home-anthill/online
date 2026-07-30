@@ -33,8 +33,9 @@ impl AppEnv {
 #[derive(Deserialize)]
 pub struct Env {
     pub log_level: Option<String>,
-    pub redis_uri: String,
+    pub online_redis_uri: String,
     pub notifications_redis_uri: String,
+    pub alarms_redis_uri: String,
     #[serde(default)]
     pub redis_username: String,
     #[serde(default)]
@@ -45,25 +46,13 @@ impl fmt::Debug for Env {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Env")
             .field("log_level", &self.log_level)
-            .field("redis_uri", &redact_redis_uri(&self.redis_uri))
-            .field("notifications_redis_uri", &redact_redis_uri(&self.notifications_redis_uri))
+            .field("online_redis_uri", &"[REDACTED]")
+            .field("notifications_redis_uri", &"[REDACTED]")
+            .field("alarms_redis_uri", &"[REDACTED]")
             .field("redis_username", &self.redis_username)
-            .field("redis_password", &"***")
+            .field("redis_password", &"[REDACTED]")
             .finish()
     }
-}
-
-/// Returns the Redis URI with any embedded password replaced by `***`.
-/// e.g. `redis://:secret@host:6379` → `redis://:***@host:6379`
-pub fn redact_redis_uri(uri: &str) -> String {
-    if let Some(at_pos) = uri.rfind('@')
-        && let Some(scheme_end) = uri.find("://")
-    {
-        let scheme_and_authority = &uri[..scheme_end + 3];
-        let host_and_rest = &uri[at_pos..];
-        return format!("{scheme_and_authority}***{host_and_rest}");
-    }
-    uri.to_string()
 }
 
 pub fn init() -> (Env, AppEnv) {
@@ -118,8 +107,9 @@ pub fn init() -> (Env, AppEnv) {
 
 fn print_env(env: &Env) {
     info!(target: "app", "log_level = {}", env.log_level.as_deref().unwrap_or("debug"));
-    info!(target: "app", "redis_uri = {}", redact_redis_uri(&env.redis_uri));
-    info!(target: "app", "notifications_redis_uri = {}", redact_redis_uri(&env.notifications_redis_uri));
+    info!(target: "app", "online_redis_uri = [REDACTED]");
+    info!(target: "app", "notifications_redis_uri = [REDACTED]");
+    info!(target: "app", "alarms_redis_uri = [REDACTED]");
     info!(target: "app", "redis_username = {}", env.redis_username);
-    info!(target: "app", "redis_password = {}", !env.redis_password.is_empty());
+    info!(target: "app", "redis_password = [REDACTED]");
 }

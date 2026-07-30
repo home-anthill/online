@@ -4,7 +4,7 @@
   <br>
 home-anthill
   <br>
-online
+alarm
 </h1>
 
 
@@ -15,9 +15,9 @@ Take a look here [home-anthill/docs](https://github.com/home-anthill/docs)
 
 ## :fire: Releases :fire:
 
-DockerHub releases [HERE](https://hub.docker.com/repository/registry-1.docker.io/ks89/online/general)
+DockerHub releases [HERE](https://hub.docker.com/repository/registry-1.docker.io/ks89/alarm/general)
 
-GitHub releases [HERE](https://github.com/home-anthill/online/releases)
+GitHub releases [HERE](https://github.com/home-anthill/alarm/releases)
 
 Versions:
 

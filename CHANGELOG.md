@@ -4,6 +4,9 @@
 
 ### Features
 
+- Renamed the service, Cargo package/binary, Docker image, and repository references from `online` to `alarm` while preserving the existing `/online` heartbeat routes and models.
+- Added a dedicated Redis DB 3 pool for alarm settings and pending-alarm token migration.
+- Moved the per-feature silence endpoint to `PUT /alarms/{device_uuid}/features/{feature_uuid}/notifications`; `/online` remains reserved for heartbeat state.
 - Added repository-specific `AGENTS.md` guidance for coding agents, covering the service
   architecture, Redis-backed integration test setup, security conventions, configuration, and
   CI/CD workflow.
@@ -11,8 +14,7 @@
   notifications Redis store, returning newest notifications first.
 - Added a dedicated `notifications_redis_pool` and `NOTIFICATIONS_REDIS_URI` configuration for
   reading notification history independently from online-state Redis data.
-- Added `PUT /online/{device_uuid}/features/{feature_uuid}/notifications` to store the
-  `notificationSilenced` Redis flag used by `online-alarm`.
+- Stored `notificationSilenced` in `alarm-settings:{device_uuid}:{feature_uuid}` hashes in Redis DB 3.
 
 ### Bug fixes
 

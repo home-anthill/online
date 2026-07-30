@@ -4,7 +4,7 @@ This file provides guidance to coding agents when working with code in this repo
 
 ## Project Overview
 
-Rust microservice for the home-anthill smart home platform. Tracks online status of devices/features in Redis, manages FCM (Firebase Cloud Messaging) tokens, stores per-feature notification silence flags, and reads profile notification history from a dedicated notifications Redis store. Built with Rocket 0.5 async web framework.
+Rust microservice for the home-anthill smart home platform. Tracks online status, manages FCM tokens, stores per-feature alarm silence flags in Redis DB 3, and reads notification history from Redis DB 1. Built with Rocket 0.5 async web framework.
 
 ## Build & Development Commands
 
@@ -26,10 +26,10 @@ make clean          # remove build artifacts
 
 ### Integration Tests
 
-All tests are integration tests that require a **real Redis instance** on `localhost:6379`. There is no mocking of Redis or external services. Tests use Redis database `0` for online-state data and Redis database `1` for notification-history data.
+All tests are integration tests that require a **real Redis instance** on `localhost:6379`. There is no mocking of Redis or external services. Tests use Redis database `0` for online state, database `1` for notification history, and database `3` for alarm settings.
 
 **Setup:**
-- Copy `.env_template` to `.env` (only `LOG_LEVEL=debug`, `REDIS_URI`, and `NOTIFICATIONS_REDIS_URI` are relevant for tests)
+- Copy `.env_template` to `.env` (`REDIS_URI`, `NOTIFICATIONS_REDIS_URI`, and `ALARMS_REDIS_URI` select DB 0, 1, and 3)
 - Start Redis with ACL authentication:
   ```bash
   docker run --name redis -p 6379:6379 -d redis redis-server \
@@ -54,11 +54,12 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
   - `GET /online/{device_uuid}/features/{feature_uuid}` — returns `createdAt`, `modifiedAt`, `currentTime` (intentionally omits `apiToken` from response)
   - `DELETE /online/{device_uuid}/features/{feature_uuid}` — delete online record; returns `200 {}` even if not found
   - `POST /fcmtoken` — set FCM token for devices matching an apiToken (requires `Content-Type: application/json`)
-  - `PUT /online/{device_uuid}/features/{feature_uuid}/notifications` — store the per-feature `notificationSilenced` flag used by `online-alarm`
+  - `PUT /alarms/{device_uuid}/features/{feature_uuid}/notifications` — store the per-feature `notificationSilenced` flag used by `alarm-notifier`
   - `PUT /api-token` — internal endpoint used by `api-server` after profile token regeneration; updates the supplied device/feature Redis hashes, moves `fcm_by_api_token` from stale token fields to the new token, and migrates notification history indexes/hashes
   - `GET /notifications/{apiToken}` — list profile notification history from the notifications Redis store, newest first
 - **db/online.rs** — Online Redis operations (HGETALL, HSET, HGET, DEL, EXISTS, SCAN). Key format: `online_{device_uuid}_feature_{feature_uuid}`
 - **db/notification.rs** — Notification Redis operations. Index key format: `notifications:by_api_token:{apiToken}`; notification hash key format: `notification:{id}`
+- **db/alarm.rs** — Redis DB 3 alarm settings and pending-alarm token migration. Settings key format: `alarm-settings:{device_uuid}:{feature_uuid}`.
 - **models/** — `Online`, `ProfileNotification`, `InitFCMTTokenInput`, `UpdateApiTokenInput`, `UpdateApiTokenDeviceFeature`, and `UpdateFeatureNotificationInput`
 - **errors/** — `ApiError`/`ApiResponse` responders, `DbError` (thiserror) enums
 - **catchers/** — HTTP error catchers (400, 404, 500, 503)
@@ -78,7 +79,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 - Handlers take `mut db: Connection<RedisPool>` and call Redis commands directly via auto-deref (no `db.clone()`). When passing the connection to a `db/` function, use `&mut db`.
 - `POST /fcmtoken` validates `apiToken` by parsing it as `uuid::Uuid` (not just checking length); `fcmToken` is checked against `MAX_FCM_TOKEN_LEN = 512`.
 - `POST /fcmtoken` declares `format = "json"` so Rocket enforces `Content-Type: application/json` at the framework level.
-- `PUT /online/{device_uuid}/features/{feature_uuid}/notifications` declares `format = "json"` and accepts `UpdateFeatureNotificationInput { notification_silenced: bool }`; the DB layer stores this as string values `"true"` or `"false"` in the online hash field `notificationSilenced`.
+- `PUT /alarms/{device_uuid}/features/{feature_uuid}/notifications` declares `format = "json"` and accepts `UpdateFeatureNotificationInput { notification_silenced: bool }`; the DB layer stores `"true"` or `"false"` in a DB 3 alarm-settings hash.
 - `PUT /api-token` validates `oldApiToken`, `newApiToken`, and each supplied `deviceFeatures[]` UUID pair. When device/features are supplied, it updates matching online hashes and deletes the stale `fcm_by_api_token` field discovered from each hash.
 - `GET /notifications/{apiToken}` validates `apiToken` as a UUID, reads from `NotificationsRedisPool`, and returns `{"notifications": [...]}` in newest-first order.
 
@@ -90,7 +91,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
 - `get_notifications_by_api_token` reads IDs from `notifications:by_api_token:{apiToken}` with `ZREVRANGE`, then loads `notification:{id}` hashes. Missing or malformed notification hashes are skipped rather than failing the whole request; Redis read failures return `DbScanError`.
 - `get_all_keys_pattern()` returns `&'static str` (not `String`) — the function returns compile-time string literals, so heap allocation is unnecessary.
 - `is_testing()` reads `ENV` once via `static IS_TESTING: OnceLock<bool>` — it is cached on first call to avoid repeated `env::var` invocations.
-- Online Redis keys use the pattern `online_{device_uuid}_feature_{feature_uuid}` and store data as Redis hashes containing fields: `apiToken`, `deviceUuid`, `featureUuid`, `fcmToken`, `createdAt`, `modifiedAt`, and optionally `notificationSilenced`.
+- Online Redis keys use the pattern `online_{device_uuid}_feature_{feature_uuid}` and store heartbeat/FCM data only. Notification preferences live exclusively in Redis DB 3 alarm-settings hashes.
 - Online Redis hashes must always contain `modifiedAt`. On creation, `createdAt` and `modifiedAt` are set to the same timestamp; on update, `createdAt` is preserved and `modifiedAt` changes.
 - Notification Redis uses sorted-set indexes at `notifications:by_api_token:{apiToken}` with notification IDs scored by send time. Notification hashes are stored at `notification:{id}` and include fields such as `id`, `sentAt`, `title`, `body`, `deviceCount`, `devices`, `provider`, `providerMessageId`, and token metadata.
 
@@ -122,6 +123,7 @@ Test utilities are in `src/tests_integration/db_utils.rs` — helpers for cleanu
   - `LOG_LEVEL=debug`
   - `REDIS_URI=redis://localhost:6379/0`
   - `NOTIFICATIONS_REDIS_URI=redis://localhost:6379/1`
+  - `ALARMS_REDIS_URI=redis://localhost:6379/3`
   - `REDIS_USERNAME=redisuser`
   - `REDIS_PASSWORD=Password1!`
 
@@ -138,6 +140,7 @@ This service handles sensitive credentials (`apiToken`, `fcmToken`) that are nev
 5. **Fail securely** — Corrupt or missing records return `404` (not found) instead of `500` (server error), preventing callers from distinguishing "record does not exist" from "record exists but is malformed".
 6. **Token rotation consistency** — When `api-server` regenerates a profile token, it calls `PUT /api-token` with device/feature UUIDs so Redis plaintext token references, `fcm_by_api_token`, and notification-history indexes/hashes do not remain stale.
 7. **Notification Redis separation** — Read profile notification history through `NotificationsRedisPool` and `NOTIFICATIONS_REDIS_URI`; do not mix notification-history data with online-state Redis operations unless an explicit migration requires touching both pools.
+8. **Alarm Redis separation** — Read/write alarm preferences and pending alarm token references through `AlarmsRedisPool` and `ALARMS_REDIS_URI` (DB 3). DB 15 is test-only.
 
 When modifying this service, assume all credentials are hostile and untrusted — validate early, log minimally, and fail securely.
 
@@ -145,7 +148,7 @@ When modifying this service, assume all credentials are hostile and untrusted �
 
 GitHub Actions workflow (`.github/workflows/docker-image.yml`):
 1. **Test job** — Ubuntu + Redis 8.x service; installs grcov + cargo-audit via cargo-binstall; runs `cp .env_template .env && make test-coverage`
-2. **Build job** — Multi-stage Docker build (GHA cache for layer caching), publishes to DockerHub as `ks89/online`
+2. **Build job** — Multi-stage Docker build (GHA cache for layer caching), publishes to DockerHub as `ks89/alarm`
 
 Triggers on `master`, `develop`, `ft**` branches, pull requests to `master`/`develop`, and `v*.*.*` tags. Markdown changes are ignored.
 
@@ -157,7 +160,7 @@ See `CHANGELOG.md` for a detailed history of project changes, including:
 - **Security fixes** (April 2026) — removed credential leakage from responses and logs, added constant-time token comparison, improved validation
 - **Idiomatic Rust refactors** — eliminated unnecessary allocations (`OnceLock` for cached config, `&'static str` for literal patterns), removed internal clones in DB functions, refactored models to use `snake_case` fields with serde `rename_all`
 - **Redis authentication support** — switched from legacy Redis default user to named ACL user for local dev and production
-- **Notification history support** (4.0.0) — added `GET /notifications/{apiToken}`, `NotificationsRedisPool`, `NOTIFICATIONS_REDIS_URI`, token-rotation migration for notification indexes/hashes, and `PUT /online/{device_uuid}/features/{feature_uuid}/notifications` for the `notificationSilenced` flag
+- **Generic alarm support** (4.0.0) — added `AlarmsRedisPool`, Redis DB 3 alarm settings/pending-token migration, and `PUT /alarms/{device_uuid}/features/{feature_uuid}/notifications`
 
 When adding new features or fixing bugs, follow these established patterns:
 - Validate input at Rocket's framework level (e.g., `uuid::Uuid` path parameters, `format = "json"` on routes)
@@ -165,4 +168,4 @@ When adding new features or fixing bugs, follow these established patterns:
 - Cache static data via `OnceLock` rather than computing on every request
 - Avoid unnecessary allocations and clones — prefer borrowing and auto-deref
 - Redact sensitive fields in custom `Debug` impls and log messages
-- Use the online Redis pool for online-state hashes and the notifications Redis pool for profile notification history
+- Use DB 0 for online/FCM data, DB 1 for notification history, and DB 3 for alarm settings/pending alarms
