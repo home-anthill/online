@@ -1,15 +1,15 @@
 [package]
-name = "ks89-alarm"
+name = "ks89-alarm-api"
 version = "4.0.0"
 edition = "2024"
 resolver = "3"
 
 [[bin]]
-name = "alarm"
+name = "alarm-api"
 path = "src/main.rs"
 
 [lib]
-name = "alarm"
+name = "alarm_api"
 path = "src/lib.rs"
 
 [profile.release]

@@ -4,7 +4,7 @@
 
 ### Features
 
-- Renamed the service, Cargo package/binary, Docker image, and repository references from `online` to `alarm` while preserving the existing `/online` heartbeat routes and models.
+- Renamed the service, Cargo package/binary, Docker image, and repository references from `online` to `alarm-api` while preserving the existing `/online` heartbeat routes and models.
 - Added a dedicated Redis DB 3 pool for alarm settings and pending-alarm token migration.
 - Moved the per-feature silence endpoint to `PUT /alarms/{device_uuid}/features/{feature_uuid}/notifications`; `/online` remains reserved for heartbeat state.
 - Added repository-specific `AGENTS.md` guidance for coding agents, covering the service

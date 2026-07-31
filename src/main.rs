@@ -6,10 +6,10 @@ use rocket_db_pools::Database;
 use tracing::{info, warn};
 use urlencoding::encode;
 
-use alarm::catchers;
-use alarm::config::init;
-use alarm::db::{AlarmsRedisPool, NotificationsRedisPool, OnlineRedisPool};
-use alarm::routes;
+use alarm_api::catchers;
+use alarm_api::config::init;
+use alarm_api::db::{AlarmsRedisPool, NotificationsRedisPool, OnlineRedisPool};
+use alarm_api::routes;
 
 #[rocket::launch]
 fn rocket() -> Rocket<Build> {

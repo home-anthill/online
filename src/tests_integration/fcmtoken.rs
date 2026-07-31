@@ -17,7 +17,7 @@ use crate::tests_integration::db_utils::{
     get_fcmtoken_by_uuid, get_notification_hash, get_notification_ids_by_api_token, insert_notification_for_api_token,
     insert_online, set_fcmtoken_for_online,
 };
-use alarm::models::inputs::{
+use alarm_api::models::inputs::{
     InitFCMTTokenInput, UpdateApiTokenDeviceFeature, UpdateApiTokenInput, UpdateFeatureNotificationInput,
 };
 

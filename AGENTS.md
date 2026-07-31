@@ -148,7 +148,7 @@ When modifying this service, assume all credentials are hostile and untrusted �
 
 GitHub Actions workflow (`.github/workflows/docker-image.yml`):
 1. **Test job** — Ubuntu + Redis 8.x service; installs grcov + cargo-audit via cargo-binstall; runs `cp .env_template .env && make test-coverage`
-2. **Build job** — Multi-stage Docker build (GHA cache for layer caching), publishes to DockerHub as `ks89/alarm`
+2. **Build job** — Multi-stage Docker build (GHA cache for layer caching), publishes to DockerHub as `ks89/alarm-api`
 
 Triggers on `master`, `develop`, `ft**` branches, pull requests to `master`/`develop`, and `v*.*.*` tags. Markdown changes are ignored.
 

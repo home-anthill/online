@@ -955,7 +955,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ks89-alarm"
+name = "ks89-alarm-api"
 version = "4.0.0"
 dependencies = [
  "dotenvy",
