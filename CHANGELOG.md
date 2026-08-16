@@ -15,6 +15,8 @@
 - Added a dedicated `notifications_redis_pool` and `NOTIFICATIONS_REDIS_URI` configuration for
   reading notification history independently from online-state Redis data.
 - Stored `notificationSilenced` in `alarm-settings:{device_uuid}:{feature_uuid}` hashes in Redis DB 3.
+- Aligned the bulk online-status response contract across `alarm-api` and `api-server` on the
+  concise `status` field, preventing valid records from being reported as `unknown`.
 
 ### Bug fixes
 

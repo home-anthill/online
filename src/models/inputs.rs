@@ -1,6 +1,20 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineBulkDeviceFeatureInput {
+    pub device_uuid: Uuid,
+    pub feature_uuid: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineBulkInput {
+    pub device_features: Vec<OnlineBulkDeviceFeatureInput>,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -18,8 +32,8 @@ impl fmt::Debug for InitFCMTTokenInput {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateApiTokenDeviceFeature {
-    pub device_uuid: String,
-    pub feature_uuid: String,
+    pub device_uuid: Uuid,
+    pub feature_uuid: Uuid,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

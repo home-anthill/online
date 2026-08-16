@@ -1,6 +1,31 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OnlineStatus {
+    Found,
+    Missing,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineBulkStatus {
+    pub device_uuid: Uuid,
+    pub feature_uuid: Uuid,
+    pub status: OnlineStatus,
+    pub created_at: Option<u128>,
+    pub modified_at: Option<u128>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineBulkResponse {
+    pub statuses: Vec<OnlineBulkStatus>,
+    pub current_time: u128,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

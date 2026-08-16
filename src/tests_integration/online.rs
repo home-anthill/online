@@ -2,6 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::rocket;
 use pretty_assertions::assert_eq;
+use rocket::http::ContentType;
 use rocket::http::Status;
 use rocket::local::asynchronous::{Client, LocalRequest, LocalResponse};
 use rocket_db_pools::deadpool_redis::{Config, Connection, Runtime, redis::aio::MultiplexedConnection};
@@ -118,6 +119,93 @@ async fn get_online_returns_not_found_when_created_at_is_invalid() {
 
     assert_eq!(res.status(), Status::NotFound);
     assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "message": "Not found", "code": 404 }));
+
+    drop_all_test_keys(&con).await;
+}
+
+#[rocket::async_test]
+#[test_log::test]
+async fn post_online_bulk_returns_found_and_missing_records() {
+    let client: Client = Client::tracked(rocket()).await.unwrap();
+    let cfg: Config = Config::from_url("redis://localhost:6379");
+    let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let connection: Connection = pool.get().await.unwrap();
+    let con: MultiplexedConnection = connection.clone();
+
+    drop_all_test_keys(&con).await;
+
+    let found_device_uuid = Uuid::new_v4();
+    let found_feature_uuid = Uuid::new_v4();
+    let missing_device_uuid = Uuid::new_v4();
+    let missing_feature_uuid = Uuid::new_v4();
+    let db_key = format!("test_{}_feature_{}", found_device_uuid, found_feature_uuid);
+    let api_token = Uuid::new_v4().to_string();
+    let date = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+    insert_online(&con, &db_key, &api_token, date).await;
+
+    let response = client
+        .post("/online/bulk")
+        .header(ContentType::JSON)
+        .body(
+            json!({
+                "deviceFeatures": [
+                    { "deviceUuid": found_device_uuid, "featureUuid": found_feature_uuid },
+                    { "deviceUuid": missing_device_uuid, "featureUuid": missing_feature_uuid }
+                ]
+            })
+            .to_string(),
+        )
+        .dispatch()
+        .await;
+
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_json::<Value>().await.unwrap();
+    assert_eq!(body["statuses"][0]["status"], "found");
+    assert_eq!(body["statuses"][0]["createdAt"].as_u64(), Some(date as u64));
+    assert_eq!(body["statuses"][0]["modifiedAt"].as_u64(), Some(date as u64));
+    assert_eq!(body["statuses"][1]["status"], "missing");
+    assert_eq!(body["statuses"][1]["createdAt"], Value::Null);
+    assert_eq!(body["statuses"][1]["modifiedAt"], Value::Null);
+    assert!(body["currentTime"].as_u64().is_some());
+
+    drop_all_test_keys(&con).await;
+}
+
+#[rocket::async_test]
+#[test_log::test]
+async fn post_online_bulk_treats_corrupt_records_as_missing() {
+    let client: Client = Client::tracked(rocket()).await.unwrap();
+    let cfg: Config = Config::from_url("redis://localhost:6379");
+    let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let connection: Connection = pool.get().await.unwrap();
+    let con: MultiplexedConnection = connection.clone();
+
+    drop_all_test_keys(&con).await;
+
+    let device_uuid = Uuid::new_v4();
+    let feature_uuid = Uuid::new_v4();
+    let db_key = format!("test_{}_feature_{}", device_uuid, feature_uuid);
+    let api_token = Uuid::new_v4().to_string();
+    insert_online_fields(&con, &db_key, &[("apiToken", &api_token), ("createdAt", "invalid"), ("modifiedAt", "1")])
+        .await;
+
+    let response = client
+        .post("/online/bulk")
+        .header(ContentType::JSON)
+        .body(
+            json!({
+                "deviceFeatures": [{ "deviceUuid": device_uuid, "featureUuid": feature_uuid }]
+            })
+            .to_string(),
+        )
+        .dispatch()
+        .await;
+
+    assert_eq!(response.status(), Status::Ok);
+    let body = response.into_json::<Value>().await.unwrap();
+    assert_eq!(body["statuses"][0]["status"], "missing");
+    assert_eq!(body["statuses"][0]["createdAt"], Value::Null);
+    assert_eq!(body["statuses"][0]["modifiedAt"], Value::Null);
 
     drop_all_test_keys(&con).await;
 }

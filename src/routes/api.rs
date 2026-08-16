@@ -87,14 +87,8 @@ pub async fn put_api_token(
 
     let mut device_features = Vec::with_capacity(input.device_features.len());
     for device_feature in &input.device_features {
-        let device_uuid = match Uuid::parse_str(&device_feature.device_uuid) {
-            Ok(val) => val.to_string(),
-            Err(_) => return error_response(Status::BadRequest, "Invalid deviceUuid"),
-        };
-        let feature_uuid = match Uuid::parse_str(&device_feature.feature_uuid) {
-            Ok(val) => val.to_string(),
-            Err(_) => return error_response(Status::BadRequest, "Invalid featureUuid"),
-        };
+        let device_uuid = device_feature.device_uuid.to_string();
+        let feature_uuid = device_feature.feature_uuid.to_string();
         device_features.push((device_uuid, feature_uuid));
     }
 

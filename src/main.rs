@@ -52,6 +52,7 @@ fn rocket() -> Rocket<Build> {
             "/",
             routes![
                 routes::online::get_online,
+                routes::online::post_online_bulk,
                 routes::online::delete_online,
                 routes::api::post_init_fcmtoken,
                 routes::api::put_api_token,

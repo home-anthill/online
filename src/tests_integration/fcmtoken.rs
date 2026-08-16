@@ -101,9 +101,9 @@ async fn put_api_token_updates_stale_online_hash_and_fcm_lookup() {
 
     drop_all_test_keys(&con).await;
 
-    let device_uuid = Uuid::new_v4().to_string();
-    let feature_uuid = Uuid::new_v4().to_string();
-    let db_key = "test_".to_owned() + &device_uuid + "_feature_" + &feature_uuid;
+    let device_uuid = Uuid::new_v4();
+    let feature_uuid = Uuid::new_v4();
+    let db_key = format!("test_{device_uuid}_feature_{feature_uuid}");
     let stale_redis_token = Uuid::new_v4().to_string();
     let old_profile_token = Uuid::new_v4().to_string();
     let new_profile_token = Uuid::new_v4().to_string();
@@ -118,10 +118,7 @@ async fn put_api_token_updates_stale_online_hash_and_fcm_lookup() {
     let body = UpdateApiTokenInput {
         old_api_token: old_profile_token,
         new_api_token: new_profile_token.clone(),
-        device_features: vec![UpdateApiTokenDeviceFeature {
-            device_uuid: device_uuid.clone(),
-            feature_uuid: feature_uuid.clone(),
-        }],
+        device_features: vec![UpdateApiTokenDeviceFeature { device_uuid, feature_uuid }],
     };
     let req: LocalRequest = client.put("/api-token").json(&body);
     let res: LocalResponse = req.dispatch().await;
@@ -253,46 +250,24 @@ async fn put_api_token_migrates_notification_history_to_new_api_token() {
 #[test_log::test]
 async fn put_api_token_rejects_invalid_uuids() {
     let client: Client = Client::tracked(rocket()).await.unwrap();
-    let valid_uuid = Uuid::new_v4().to_string();
+    let valid_uuid = Uuid::new_v4();
 
     let cases = [
         (
             UpdateApiTokenInput {
                 old_api_token: "not-a-uuid".to_owned(),
-                new_api_token: valid_uuid.clone(),
+                new_api_token: valid_uuid.to_string(),
                 device_features: vec![],
             },
             "Invalid oldApiToken",
         ),
         (
             UpdateApiTokenInput {
-                old_api_token: valid_uuid.clone(),
+                old_api_token: valid_uuid.to_string(),
                 new_api_token: "not-a-uuid".to_owned(),
                 device_features: vec![],
             },
             "Invalid newApiToken",
-        ),
-        (
-            UpdateApiTokenInput {
-                old_api_token: valid_uuid.clone(),
-                new_api_token: valid_uuid.clone(),
-                device_features: vec![UpdateApiTokenDeviceFeature {
-                    device_uuid: "not-a-uuid".to_owned(),
-                    feature_uuid: valid_uuid.clone(),
-                }],
-            },
-            "Invalid deviceUuid",
-        ),
-        (
-            UpdateApiTokenInput {
-                old_api_token: valid_uuid.clone(),
-                new_api_token: valid_uuid.clone(),
-                device_features: vec![UpdateApiTokenDeviceFeature {
-                    device_uuid: valid_uuid.clone(),
-                    feature_uuid: "not-a-uuid".to_owned(),
-                }],
-            },
-            "Invalid featureUuid",
         ),
     ];
 
@@ -302,5 +277,23 @@ async fn put_api_token_rejects_invalid_uuids() {
 
         assert_eq!(res.status(), Status::BadRequest);
         assert_eq!(res.into_json::<Value>().await.unwrap(), json!({ "message": message, "code": 400 }));
+    }
+
+    for body in [
+        json!({
+            "oldApiToken": valid_uuid,
+            "newApiToken": valid_uuid,
+            "deviceFeatures": [{ "deviceUuid": "not-a-uuid", "featureUuid": valid_uuid }]
+        }),
+        json!({
+            "oldApiToken": valid_uuid,
+            "newApiToken": valid_uuid,
+            "deviceFeatures": [{ "deviceUuid": valid_uuid, "featureUuid": "not-a-uuid" }]
+        }),
+    ] {
+        let req: LocalRequest = client.put("/api-token").json(&body);
+        let res: LocalResponse = req.dispatch().await;
+
+        assert_eq!(res.status(), Status::UnprocessableEntity);
     }
 }
